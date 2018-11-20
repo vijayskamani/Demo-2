@@ -1,0 +1,9 @@
+<aura:component >
+    <aura:attribute name="accounts" type="Accounts"/>
+    <ui:button label="Get List Of Accounts"/>
+    <br/>
+    <aura:iteration var="a" items="{!v.accounts}">
+        
+    </aura:iteration>
+	
+</aura:component>

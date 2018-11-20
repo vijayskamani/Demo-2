@@ -1,0 +1,19 @@
+<apex:page controller="Flosum.SecuritySettingsController" sidebar="false">
+	<apex:sectionHeader title="Security Settings" description="Used to setup restriction for specific files from getting uploaded"/>
+	<apex:form id="mainForm">
+		<apex:pageMessages id="msg"/>
+		<apex:pageBlock >
+          <apex:pageblockbuttons location="top">
+			<apex:commandButton value="Save" action="{!save}" rerender="msg,inputArea1"/>
+		  </apex:pageblockbuttons>  
+          <apex:pageblocksection title="Whitelist" collapsible="false" showHeader="false" columns="1" id="inputArea1">
+          <apex:outputPanel >
+    <apex:inputCheckbox value="{!isFilter}" />
+    <apex:outputText > &nbsp;&nbsp;&nbsp; Restrict allowed files to specified list</apex:outputText>
+          </apex:outputPanel>
+				<apex:outputText value="Specify the extensions for files allowed to upload as a comma-separated list (for example: doc,pdf,txt)"/>
+				<apex:inputTextarea id="extList" value="{!extList}" cols="80" rows="5"/><p/>
+		  </apex:pageblocksection>
+		</apex:pageBlock>
+	</apex:form>
+</apex:page>

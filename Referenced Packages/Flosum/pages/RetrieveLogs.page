@@ -1,0 +1,31 @@
+<apex:page standardController="Flosum__Metadata_Log__c" extensions="Flosum.RetrieveLogsController" action="{!setUpAuthentication}" sidebar="false">
+	<c:Wait />
+	<apex:form >
+		<apex:pagemessages id="msg"/>
+		<apex:pageMessage escape="false" summary="The log could not be retrieved since:<br/>
+												1. The deployment ID is missing.<br/>
+												2. The job is already completed.<br/>
+												3. &quot;Job completed&quot; checkbox should be unchecked.<br/><br/>
+												Please check after some time. If Flosum gets the deployment ID, the logs can be retrieved after some time." severity="info" strength="0" rendered="{!!IsValid}"/>
+		<apex:actionFunction name="checkStatusOfLog" action="{!redirectToLog}" reRender="msg" onComplete="hide();" />
+		<apex:pageblock Title="Retrieve Logs">
+			<apex:pageBlockSection >
+				<apex:outputField value="{!Flosum__Metadata_Log__c.Flosum__Organisation__c}"/>
+				<apex:outputField value="{!Flosum__Metadata_Log__c.Flosum__Patch__c}"/>
+				<apex:outputField value="{!Flosum__Metadata_Log__c.Flosum__Process_Type__c}"/>
+				
+				<apex:outputField value="{!Flosum__Metadata_Log__c.Flosum__Run_Test_Param__c}"/>
+				<apex:outputField value="{!Flosum__Metadata_Log__c.Flosum__Succeed__c}"/>
+			</apex:pageBlockSection>
+		</apex:pageblock>
+	</apex:form>
+	<script>
+		$( document ).ready(function() {
+			if({!IsValid})
+			{
+				show();
+		    	checkStatusOfLog();
+		    }
+		});
+	</script>
+</apex:page>

@@ -1,0 +1,393 @@
+<apex:page controller="Flosum.HistoryComparisonController" sidebar="false" doctype="html-5.0" standardStylesheets="false">
+	<c:TrackPanel />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'beauty/forMatXML.js')}"/>
+	<apex:stylesheet value="{!$Resource.Flosum__DiffCSS}"/>
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__DiffJS)}" />
+	<c:Wait />
+	<apex:pagemessages id="msg"/>
+    <apex:form id="form" rendered="{!if(source != null && target != null,true,false)}">
+	    <apex:actionfunction name="startCompare" onComplete="calcDifference(0,'Version :'+'{!source.Flosum__Version__c}','Version :'+'{!target.Flosum__Version__c}'); hide();" reRender="none" rendered="{!if(fromMerge != 'fromMerge' || fromMerge != 'fromCommit',true,false)}" / >
+        <apex:actionfunction name="startCompare" onComplete="calcDifference(0,'{!source.Component__r.RecordType.Name}'+' Component','{!target.Component__r.RecordType.Name}'+' Component'); hide();" reRender="none" rendered="{!if(fromMerge == 'fromMerge',true,false)}"/ >
+        <apex:actionfunction name="startCompare" onComplete="calcDifference(0,'{!sourceTitle}','{!targetTitle}'); hide();" reRender="none" rendered="{!if(fromMerge == 'fromCommit',true,false)}"/ >
+        <apex:pageBlock title="{!source.Component__r.Flosum__Component_Name__c}">
+            <apex:pageBlockbuttons > 
+            	<apex:commandbutton value="Back" action="{!back}" reRender="msg" rendered="{!if(fromMerge == 'fromMerge' || fromMerge == 'fromCommit',false,true)}" style="margin-left: 200px;" />
+            </apex:pageBlockbuttons>
+            <div id="pairContents" style="display: none;margin:5px;margin-left:20px;text-align:left;">
+            	<a id="0" style="display: none;" href="javascript:void(0);" onclick="rowClick(this)">View difference for component</a>&nbsp;&nbsp;&nbsp;&nbsp;
+            	<a id="1" style="display: none;" href="javascript:void(0);" onclick="rowClick(this)">View difference for meta file</a>&nbsp;&nbsp;&nbsp;&nbsp;
+            	<input type="checkbox" onclick="changeView()" id="ignoreWS" > Ignore white spaces</input>
+            </div>
+            <div id="bundleContents" style="display:block">
+            	<table class="list" border="0" cellspacing="0" cellpadding="0" id="bundleTable">
+            		<tbody>
+            			<tr  id="templateHeaderRow" style="display:none" class="headerRow">
+            				<th scope="col" class=" zen-deemphasize" >{leftComp}</th>
+            				<th scope="col" class=" zen-deemphasize">{rightComp}</th>
+            				<th scope="col" class=" zen-deemphasize">Compare</th>
+            				<th scope="col" class=" zen-deemphasize"></th>
+            			</tr>
+            			<tr id="templateDataRow" style="display:none" class="dataRow">
+            				<td class="dataCell">{leftName}</td>
+            				<td class="dataCell">{rightName}</td>
+            				<td class="dataCell">{compare}</td>
+            				<td class="dataCell">{action}</td>
+            				<td class="dataCell" style="display:none">{id}</td>
+            			</tr>
+            		</tbody>
+            	</table> 	
+             </div>
+            <apex:pageBlockSection columns="1">
+                <textarea  id="baseText" style="display:none" cols="50">
+                </textarea>
+                <input type="text" id="contextSize" value="10000" style="display:none"/>
+                <textarea id="newText" style="display:none" cols="50" >
+                </textarea>
+                <apex:pageBlockSectionItem >
+                    <apex:outputpanel id="compareBlock">
+                        <div id="diffoutput">
+                        </div> 
+                    </apex:outputpanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        <apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="hide();">
+			<apex:param assignTo="{!message}" value="" name="newstr"/>
+		</apex:actionfunction>
+    </apex:form>
+    <script>
+    	var typesWithMeta = new Object();
+     	typesWithMeta['ApexClass'] = true;
+     	typesWithMeta['ApexTrigger'] = true;
+     	typesWithMeta['ApexComponent'] = true;
+     	typesWithMeta['ApexPage'] = true;
+     	typesWithMeta['EmailTemplate'] = true;
+     	
+    	var sourceId = ""+'{!sourceAttId}';
+    	var targetId = ""+'{!targetAttId}';
+    	var sourceFilename = ""+'{!sourceFileName}';
+    	var targetFilename = ""+'{!targetFileName}';
+    	var sourceOfComparison = '{!$CurrentPage.parameters.fromMerge}';
+    	var sourceFullName = ""+'{!source.Component__r.Flosum__Component_Name__c}';
+    	var targetFullName = ""+'{!source.Component__r.Flosum__Component_Name__c}';
+    	var metadataType = ""+'{!source.Component__r.Component_Type__c}';
+    	
+    	var viewBundleMode = false;
+   		var paringMode = false;
+    	var leftCompTitle, rightCompTitle
+    	var fromMerge = ""+'{!fromMerge}';
+    	var bTable = [];
+    	var bIgnoreWS = false;
+    	
+    	// onload:  check type: if metadataType == AuraDefinitionBundle, then: first: get the list of files from bundle, form src-dest pairs, create and fill the table, make it visible
+    	// executed on load
+    	$(function() {
+    		if(metadataType === 'AuraDefinitionBundle') {
+    			viewBundleMode = true;
+    			//console.log('fromMerge:'+fromMerge);
+    			if(fromMerge != 'fromMerge' || fromMerge != 'fromCommit') {
+    				leftCompTitle = 'Version :'+'{!source.Version__c}';
+    				rightCompTitle = 'Version :'+'{!target.Version__c}';
+    			}else if(fromMerge == 'fromMerge') {
+    				leftCompTitle = '{!source.Component__r.RecordType.Name}'+' Component';
+    				rightCompTitle = '{!target.Component__r.RecordType.Name}'+' Component';
+    			}else if(fromMerge == 'fromCommit') {
+    				leftCompTitle = '{!sourceTitle}';
+    				rightCompTitle = '{!targetTitle}';
+    			}
+    			//console.log('leftCompTitle='+leftCompTitle);
+    			//console.log('sourceFilename='+sourceFilename);
+    			//console.log('targetFilename='+targetFilename);
+    			addRow(getTemplateHeaderRow(leftCompTitle,rightCompTitle));
+    			loadData();
+    		}else if(metadataType != undefined && typesWithMeta[metadataType] != undefined) {
+    			loadData();
+    			document.getElementById('pairContents').style.display = 'inline';
+    		}else{
+    			viewStandards();
+    		}
+    	});
+    	
+    	function calcDifference(type, src,tgt){
+    		diffUsingJS(type,src,tgt,bIgnoreWS);
+    	}
+    	
+    	function rowClick(this_) {
+ 			//console.log("test called");
+			 var serviceID = this_.id;
+			 var id = this_.getAttribute("id");
+ 			//console.log("serviceID :: " + serviceID);
+ 			//console.log("serviceID :: " + id);
+ 			if(id != undefined) {
+				document.getElementById('baseText').value = bTable[id].source;
+				document.getElementById('newText').value = bTable[id].target;
+				startCompare();
+			}
+		}
+		
+		function changeView(){
+			bIgnoreWS = bIgnoreWS == true ? false : true;
+			console.log('clicked'+bIgnoreWS);
+			startCompare();
+		}
+
+    	/*******		aura definition bundle components				*******/
+    	function loadData() { // loading pair of components
+    		//console.log('loading pair:'+sourceId +','+targetId);
+    	   	if(sourceId.length == 18 && targetId.length == 18)
+	    	{
+	    		show();
+    			Visualforce.remoting.Manager.invokeAction(
+			        '{!$RemoteAction.HistoryComparisonController.getBase64Pair}',
+			        sourceId,
+  					targetId,
+					handleSrcDest
+			    );
+			}
+    	}
+    	
+     	function handleSrcDest(r,e)
+		{
+		    if(e.status && r) 
+		    {
+		    	if(r != '' && r != undefined)
+		    	{
+		    		var zipLeft = new JSZip(r[sourceId],{base64:true});
+		    		var zipRight = new JSZip(r[targetId],{base64:true});
+		    		var mapLeft = getBundleMap(zipLeft);
+		    		var mapRight = getBundleMap(zipRight,targetFilename);// filter target by name
+		    		var counter = 0;
+		    		bTable = [];
+		    		
+		    		if(metadataType === 'AuraDefinitionBundle') {
+			    		//iterate over all left, if not present in right, then deleted 
+			    		for(var name in mapLeft) {
+			    			if(mapLeft.hasOwnProperty(name) && mapRight.hasOwnProperty(name)) {
+		    					var rec1 = mapLeft[name];
+		    					var rec2 = mapRight[name];
+		    					bTable.push({'lCompName':rec1.compName,'rCompName':rec2.compName, 'source':rec1.source, 'target':rec2.source,
+		    							 'compare':rec1.crc32 === rec2.crc32?'equal':'changed'});		
+		    				}else if(mapLeft.hasOwnProperty(name) && !mapRight.hasOwnProperty(name)) {
+		    					var rec = mapLeft[name];
+			    				bTable.push({'lCompName':rec.compName,'rCompName':'', 'source':rec.source, 'compare':'deleted'});		
+			    			}
+		    			
+			    		}
+		    		
+			    		//iterate over all right, add only if not present in left (i.e. added) 
+			    		for(var name in mapRight){
+			    			if(mapRight.hasOwnProperty(name) && !mapLeft.hasOwnProperty(name)) {
+		    					var rec = mapRight[name];
+		    					bTable.push({'lCompName':'','rCompName':rec.compName, 'target':rec.source, 'compare':'added'});		
+		    				}
+		    			}
+		    		
+			    		if(bTable.length > 0) {
+			    			for(var x = 0; x < bTable.length; x++) {
+			    				addRow(getTemplateDataRow(bTable[x].lCompName, bTable[x].rCompName, bTable[x].compare, x));
+		    				}
+		    			}
+		    		}else {//reorder the table (meta file 1st)
+		    			paringMode = true;
+		    			var fileMap = {};
+		    			for(var name in mapLeft){
+		    				if (mapLeft.hasOwnProperty(name) && mapRight.hasOwnProperty(name)){
+		    					var rec1 = mapLeft[name];
+		    					var rec2 = mapRight[name];
+		    					if (rec1.compName != undefined && rec2.compName != undefined){// wrong zip
+		    						if (rec1.compName.indexOf('-meta.xml') == -1){
+		    							fileMap['main'] = {'lCompName':rec1.compName,'rCompName':rec2.compName, 'source':rec1.source, 'target':rec2.source,
+		    							 					'compare':rec1.crc32 === rec2.crc32?'equal':'changed'};
+		    						}else{
+		    							fileMap['meta'] = {'lCompName':rec1.compName,'rCompName':rec2.compName, 'source':rec1.source, 'target':rec2.source,
+		    							 					'compare':rec1.crc32 === rec2.crc32?'equal':'changed'};
+		    						}
+		    					}
+		    				}
+		    			}
+		    			const emptyRecord = {'lCompName':rec1.compName,'rCompName':rec2.compName, 'source':rec1.source, 'target':rec2.source, 'error':'Wrong component (*-meta.xml or component itself is absent)'};
+		    			if(fileMap['main'] != undefined) {
+		    				bTable.push(fileMap['main']);
+		    				document.getElementById('0').style.display = '';	
+		    			}else {
+		    				btable.push(emptyRecord);
+		    			}
+		    			if(fileMap['meta'] != undefined) {
+		    				bTable.push(fileMap['meta']);
+		    				document.getElementById('1').style.display = '';	
+		    			}else {
+		    				btable.push(emptyRecord);
+		    			}
+		    		}
+		    		hide();
+		    		if(paringMode) {
+	    				document.getElementById('baseText').value = bTable[0].source;
+						document.getElementById('newText').value = bTable[0].target;
+						startCompare();
+					}
+		    	}
+   		    }
+		    else
+		    {
+		    	console.log(e.message);
+		    	//showMessage(e.message);
+		    }
+ 		}
+ 		
+ 		function getBundleMap(zip,filter){
+ 			var filesMap = {};
+ 			if (zip == undefined || zip == '') return filesMap;
+    		for (var fileName in zip.files){
+				var descriptor = {};
+				descriptor.compName = fileName.substr(fileName.lastIndexOf('/')+1);
+				descriptor.fileName = fileName;
+				descriptor.source = zip.file(fileName).asText();
+				if (descriptor.source != null && descriptor.source != '' && fileName != undefined){
+					descriptor.IsXML = (descriptor.source.indexOf('<?xml') > -1)?true:false;
+					descriptor.crc32 = zip.crc32(descriptor.source,32);
+					if (filter != undefined){
+						if (fileName.indexOf(filter) != -1 ){
+							filesMap[descriptor.compName] = descriptor;
+						}
+					}else{
+						filesMap[descriptor.compName] = descriptor;
+					}
+				}
+			}
+			//console.log(JSON.stringify(filesMap));
+ 			return filesMap;
+ 		}
+ 		
+ 		function getTemplateHeaderRow(left,right) {
+			var x = document.getElementById("templateHeaderRow").cloneNode(true);
+			x.id = "";
+			x.style.display = "";
+			x.innerHTML = x.innerHTML.replace(/{leftComp}/, left);
+			x.innerHTML = x.innerHTML.replace(/{rightComp}/, right);
+			//console.log(JSON.stringify(x));
+			return x;
+		}
+ 
+ 		function getTemplateDataRow(left,right,compare, id) {
+			var x = document.getElementById("templateDataRow").cloneNode(true);
+			x.id = id;
+			x.style.display = "";
+			var tds = x.getElementsByTagName("td");
+			if (compare === 'equal' || compare === 'changed'){
+				actionLink = '<a id="'+id+'" href="javascript:void(0);" onclick="rowClick(this)">view</a>'
+				if (compare === 'changed'){
+					tds[2].style.color = '#f00000';
+				}else{
+					tds[2].style.color = '#00e010';
+				}
+			}else{
+				actionLink = '';
+			}
+			x.innerHTML = x.innerHTML.replace(/{leftName}/, left);
+			x.innerHTML = x.innerHTML.replace(/{rightName}/, right);
+			x.innerHTML = x.innerHTML.replace(/{compare}/, compare);
+			x.innerHTML = x.innerHTML.replace(/{action}/, actionLink);
+			x.innerHTML = x.innerHTML.replace(/{id}/, id);
+			//console.log(JSON.stringify(x));
+			return x;
+		}
+		
+		function addRow(row) {
+			var t = document.getElementById("bundleTable");
+			var rows = t.getElementsByTagName("tr");
+			var r = rows[rows.length - 1];
+			r.parentNode.insertBefore(row, r);
+		}	
+    	
+    	
+    	/*******		standard components				*******/
+    	function viewStandards(){
+    	   	if(sourceId.length == 18 && targetId.length == 18)
+	    	{
+	    		show();
+	    		
+	    		Visualforce.remoting.Manager.invokeAction(
+					        '{!$RemoteAction.HistoryComparisonController.getBase64}',
+					        sourceId,
+					        handleGetData
+					    );
+	    	}
+    	}
+    	
+    	function handleGetData(r,e)
+		{
+		    if(e.status && r) 
+		    {
+		    	if(r != '')
+		    	{
+	                var zip = new JSZip(r,{base64:true});
+                    if(zip.files[sourceFilename] != undefined)
+                    {
+                    	var fullXml = zip.files[sourceFilename].asText();
+                    	if(childMap[metadataType] != undefined)
+                    	{
+//                    		fullXml = formatXml(fullXml);
+                    		document.getElementById('baseText').value = vkbeautify.xml(fullXml);
+                    	}
+                    	else
+                    	{
+//                    		fullXml = formatXml(fullXml);
+                        	document.getElementById('baseText').value = vkbeautify.xml(fullXml);
+                        }
+                    }
+	                Visualforce.remoting.Manager.invokeAction(
+				        '{!$RemoteAction.HistoryComparisonController.getBase64}',
+				        targetId,
+				        handleGetData2
+				    );
+		    	}
+		    }
+		    else
+		    {
+		    	//console.log(e.message);
+		    	//showMessage(e.message);
+		    }
+        }
+        
+        function handleGetData2(r,e)
+		{
+		    if(e.status && r) 
+		    {
+		    	if(r != '')
+		    	{
+	                var zip = new JSZip(r,{base64:true});
+                    if(zip.files[targetFilename] != undefined)
+                    {
+                    	var fullXml = zip.files[targetFilename].asText();
+                    	if(childMap[metadataType] != undefined)
+                    	{
+                    		if(sourceOfComparison == 'fromCommit')
+                    		{
+	                    		var childDataMap = childSplitter(fullXml,metadataType,targetFullName);
+	                    		var tempXml = childDataMap[metadataType+'#'+targetFullName];
+	                    		if(tempXml != undefined )
+	                    		{
+	                    			document.getElementById('newText').value = vkbeautify.xml(tempXml);
+	                    		}
+                    		}
+                    		else
+                    			document.getElementById('newText').value = vkbeautify.xml(fullXml);
+                    	}
+                    	else
+                    	{
+                        	document.getElementById('newText').value = vkbeautify.xml(fullXml);
+                        }
+                    }
+	                startCompare();
+		    	}
+		    }
+		    else
+		    {
+		    	//console.log(e.message);
+		    	//showMessage(e.message);
+		    }
+        }
+    </script>
+</apex:page>

@@ -1,0 +1,461 @@
+<apex:page standardController="Flosum__Patch_Manifest__c" sidebar="false" extensions="Flosum.EditPatchManifestController">
+    <c:TrackPanel />
+    <c:Wait />
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/ace.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/mode-xml.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/mode-java.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/mode-html.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/theme-chrome.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/ext-searchbox.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'beauty/forMatXML.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/ga.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/zip.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__X2JS)}"/>
+    <style type="text/css" media="screen">
+       #editor {
+           	height: 600px;
+       	}
+      	.ace_print-margin {
+            visibility: hidden!important;
+        }
+        span.ace_searchbtn.prev, span.ace_searchbtn.next {
+		    padding-top: 9px;
+		    padding-bottom: 7px;
+		}
+    </style>
+    <apex:pagemessages id="msg"/>
+    <apex:sectionHeader title="{!Flosum__Patch_Manifest__c.Flosum__Component_Name__c}"/>
+    <apex:pageBlock title="{!Flosum__Patch_Manifest__c.Flosum__Component_Type__c} Edit">
+        <apex:pageBlockSection columns="1">
+        	<div id="editor"/>
+        </apex:pageBlockSection>
+        <apex:pageBlockButtons >
+            <apex:form >
+                <apex:commandbutton onClick="updateContentOfPatchManifest(); return false;" value="Save" reRender="none" rendered="{!IF(patchManifestId != null && patchManifestId != '',true,false)}"/>
+                <apex:commandbutton action="{!cancel}" value="Cancel" reRender="none"/>
+                <apex:actionFunction name="updateContent" action="{!updateContent}" reRender="none" onComplete="hide();">
+                    <apex:param assignTo="{!base64Content}" value="" name="base64Str"/>
+                </apex:actionFunction>
+            </apex:form>
+        </apex:pageBlockButtons>
+    </apex:pageBlock>
+    <script>
+        Visualforce.remoting.timeout = 120000;
+        zip.workerScriptsPath = "{!URLFOR($Resource.zipp,'res/js/workers')}/";
+        var zipFileEntry, zipWriter, writer, creationMethod, URL = window.webkitURL || window.mozURL || window.URL;
+        var patchManifestId = '{!JSENCODE(patchManifestId)}';
+        var patchManifestDetail;
+        var patchManifestContentMap = {};
+        var editor;
+        
+        var bundleTypes = {};
+        bundleTypes['AuraDefinitionBundle'] = 'AuraDefinitionBundle';
+        
+        var mmap = new Object();
+        mmap['CustomField'] = true;
+        mmap['CustomLabel'] = true;
+        mmap['CompactLayout'] = true;
+        mmap['WebLink'] = true;
+        mmap['RecordType'] = true;
+        mmap['ListView'] = true;
+        mmap['FieldSet'] = true;
+        mmap['AssignmentRule'] = true;
+        mmap['AutoResponseRule'] = true;
+        mmap['ValidationRule'] = true;
+        mmap['WorkflowTask'] = true;
+        mmap['WorkflowOutboundMessage'] = true;
+        mmap['WorkflowFieldUpdate'] = true;
+        mmap['WorkflowKnowledgePublish'] = true;
+        mmap['WorkflowAlert'] = true;
+        mmap['WorkflowRule'] = true;
+        
+        mmap['SharingOwnerRule'] = true;
+        mmap['SharingCriteriaRule'] = true;
+        mmap['BusinessProcess'] = true;
+        mmap['SharingReason'] = true;
+        mmap['EscalationRule'] = true;
+        mmap['MatchingRule'] = true;
+        mmap['ManagedTopic'] = true;
+        
+        var folderMap = {};
+        folderMap['DocumentFolder'] = 'Document';
+        folderMap['DashboardFolder'] = 'Dashboard';
+        folderMap['ReportFolder'] = 'Report';
+        folderMap['EmailFolder'] = 'EmailTemplate';
+        
+        $( document ).ready(function() {
+           	getPatchManifestInfo();
+        });
+        
+        function updateContentOfPatchManifest()
+        {
+            if(editor != undefined)
+            {
+                var textContent = editor.getValue();
+                if(mmap[patchManifestDetail.metadataType] != undefined)
+                {
+                	textContent = vkbeautify.xmlmin(textContent);
+                }
+                if(textContent != undefined)
+                {
+                    var files = [];
+                    for(var keyFileName in patchManifestContentMap)
+                    {
+                        var oneFile = {};
+                        oneFile.name = keyFileName;
+                        oneFile.data = patchManifestContentMap[keyFileName];
+                        if(keyFileName == patchManifestDetail.fileName)
+                            oneFile.data = textContent;
+                        files.push(oneFile);
+                    }
+                    
+                    var addIndex = 0;
+                    var tempWriter;
+                    function nextFile() 
+                    {
+                        var file = files[addIndex];
+                        tempWriter.add(file.name, new zip.TextReader(file.data), function() {
+                            addIndex++;
+                            if (addIndex < files.length)
+                                nextFile();
+                            else
+                            {
+                                tempWriter.close(function(base64Data) {
+                                    base64Data = base64Data.slice(base64Data.indexOf(';base64,') + 8);
+                                    updateContent(base64Data);
+                                });
+                            }
+                        });
+                    }
+        
+                    function createZipWriter() {
+                           zip.createWriter(new zip.Data64URIWriter(), function(writer2) {
+                            tempWriter = writer2;
+                            nextFile();
+                        }, function(error) {
+                            // onerror callback
+                            console.log('Error while creating zip files for attachments.');
+                            console.log(error);
+                            console.log(JSON.stringify(error));
+                            showMessage(JSON.stringify(error),'ERROR');
+                        });
+                    }
+                    createZipWriter();
+                }
+            }
+        }
+        
+        //get information of patch manifest record.
+        function getPatchManifestInfo()
+        {
+            if(patchManifestId != null && patchManifestId != '')
+            {
+	            show();
+	            patchManifestContentMap = {};
+	            Visualforce.remoting.Manager.invokeAction(
+	                '{!$RemoteAction.EditPatchManifestController.getPatchManifestInfo}',
+	                patchManifestId,
+	                function(r,e){
+	                    if(e.status && r) 
+	                    {
+	                        /*console.log(r);
+	                        if(r.isSuccess)
+	                        {*/
+	                            patchManifestDetail = r;
+	                            getPatchManifestContent();
+	                        /*}
+	                        else
+	                            showMessage(r.errorMessage,'ERROR');*/
+	                    }
+	                    else if(e.message != undefined)
+	                    {
+	                        showMessage(e.message,'ERROR');
+	                    }
+	                    else
+	                        showMessage('Component not found.','ERROR');
+	            });
+            }
+        }
+        
+        //get content of patch manifest item.
+        function getPatchManifestContent()
+        {
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.EditPatchManifestController.getPatchManifestContent}',
+                patchManifestId,
+                function(r,e){
+                    if(e.status && r) 
+                    {
+                        // use a Data64URIReader to read the zip from a base64 string
+                            zip.createReader(new zip.Data64URIReader(r), function(reader) {
+                                var EntryIndex = 0;
+                                // get all entries from the zip
+                                reader.getEntries(function(entries) {
+                                    if(entries.length)
+                                    {
+                                        var readSingleFile = function() {
+                                                if (EntryIndex < entries.length) 
+                                                {
+                                                    var singleEntry = entries[EntryIndex];
+                                                    var fileName = singleEntry.filename;
+                                                    entries[EntryIndex].getData(new zip.TextWriter(), function(TextContent) {
+                                                        if(fileName == patchManifestDetail.fileName)
+                                                        {
+                                                            if(mmap[patchManifestDetail.metadataType] != undefined)
+                                                            {
+                                                            	var formatedXml1 = getChildXml(patchManifestDetail.metadataType,patchManifestDetail.fullName,TextContent);
+                                                                formatedXml1 = vkbeautify.xml(formatedXml1);
+                                                                patchManifestContentMap[fileName] = formatedXml1;
+                                                            }
+                                                            else    
+                                                                patchManifestContentMap[fileName] = TextContent;
+                                                        }
+                                                        else if(fileName == patchManifestDetail.fileName+'-meta.xml')
+                                                        {
+                                                            patchManifestContentMap[patchManifestDetail.fileName+'-meta.xml'] = TextContent;
+                                                        }
+                                                        EntryIndex++;
+                                                        readSingleFile();
+                                                    });
+                                                }
+                                                else
+                                                {
+                                                    // close the zip reader
+                                                    reader.close(function() {
+                                                      // onclose callback
+                                                        console.log('Done.');
+                                                        console.log(patchManifestContentMap);
+                                                        fillContentToEditor();
+                                                    });
+                                                }
+                                            }
+                                            readSingleFile();
+                                    }
+                                    else
+                                    {
+                                        showMessage('Content of component not found.','ERROR');
+                                    }
+                                });
+                            }, function(error) {
+                                  // onerror callback
+                                  console.log('Error in reading file from attachments.');
+                                  console.log(error);
+                                  console.log(JSON.stringify(error));
+                                    if(error.message != undefined)
+                                    {
+                                        showMessage(error.message,'ERROR');
+                                    }
+                                    else
+                                    {
+                                        showMessage('Unknown error.','ERROR');
+                                    }
+                            });
+                    }
+                    else if(e.message != undefined)
+                    {
+                        showMessage(e.message,'ERROR');
+                    }
+                    else
+                        showMessage('Content of component not found.','ERROR');
+            });
+        }
+        
+        function fillContentToEditor()
+        {
+            if(patchManifestContentMap != undefined && patchManifestDetail != undefined && patchManifestContentMap[patchManifestDetail.fileName] != undefined)
+            {
+                var con = patchManifestContentMap[patchManifestDetail.fileName];
+                editor = ace.edit("editor");
+                editor.setTheme("ace/theme/chrome");
+                editor.getSession().setMode(patchManifestDetail.editorMode);
+                editor.setValue(con,1);
+                hide();
+            }
+            else
+                showMessage('Content of component not found.','ERROR');
+        }
+        
+        function destroyEditory()
+        {
+            if(editor != undefined)
+            {
+                editor.destroy();
+                editor.container.remove();
+            }
+        }
+        
+        function showMessage(Message_Str,Message_Type) {
+            var parentVal = $("[id$='msg']");
+            if(parentVal != undefined)
+            {
+                parentVal.html('');
+                if(Message_Str != '')
+                {
+                    if(Message_Type == 'ERROR')
+                    {
+                        var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                        '<div class="message errorM3" role="alert">'+
+                                            '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                '<tbody>'+
+                                                    '<tr valign="top">'+
+                                                        '<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+                                                        '<td class="messageCell">'+
+                                                            '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                                '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+                                                                    '<h4>Error:</h4>'+
+                                                                '</span>'+Message_Str+'<br>'+
+                                                            '</div>'+
+                                                        '</td>'+
+                                                    '</tr>'+
+                                                    '<tr>'+
+                                                        '<td></td>'+
+                                                        '<td></td>'+
+                                                    '</tr>'+
+                                                '</tbody>'+
+                                            '</table>'+
+                                        '</div>'+
+                                    '</span>';
+                        parentVal.append(childVal);
+                    }
+                    else if(Message_Type == 'INFO')
+                    {
+                        var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                            '<div class="message infoM3" role="alert">'+
+                                                '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                    '<tbody>'+
+                                                        '<tr valign="top">'+
+                                                            '<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+                                                            '<td class="messageCell">'+
+                                                                '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                                    '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+                                                                        '<h4></h4>'+
+                                                                    '</span>'+Message_Str+'<br>'+
+                                                                '</div>'+
+                                                            '</td>'+
+                                                        '</tr>'+
+                                                        '<tr>'+
+                                                            '<td></td>'+
+                                                            '<td></td>'+
+                                                        '</tr>'+
+                                                    '</tbody>'+
+                                                '</table>'+
+                                            '</div>'+
+                                        '</span>';
+                        parentVal.append(childVal);
+                    }
+                }
+            }
+            hide();
+        }
+        
+        function getChildXml(metaType,fullName,data)
+        {
+            var typeTagNameMap = {};
+            typeTagNameMap['WorkflowAlert'] = 'alerts';
+            typeTagNameMap['AssignmentRule'] = 'assignmentRule';
+            typeTagNameMap['AutoResponseRule'] = 'autoResponseRule';
+            typeTagNameMap['BusinessProcess'] = 'businessProcesses';
+            typeTagNameMap['CompactLayout'] = 'compactLayouts';
+            typeTagNameMap['EscalationRule'] = 'escalationRule';
+            typeTagNameMap['CustomField'] = 'fields';
+            typeTagNameMap['FieldSet'] = 'fieldSets';
+            typeTagNameMap['WorkflowKnowledgePublish'] = 'knowledgePublishes';
+            typeTagNameMap['WorkflowFieldUpdate'] = 'fieldUpdates';
+            typeTagNameMap['CustomLabel'] = 'labels';
+            typeTagNameMap['ListView'] = 'listViews';
+            typeTagNameMap['ManagedTopic'] = 'ManagedTopic';
+            typeTagNameMap['MatchingRule'] = 'matchingRules';
+            typeTagNameMap['WorkflowOutboundMessage'] = 'outboundMessages';
+            typeTagNameMap['WorkflowRule'] = 'rules';
+            typeTagNameMap['RecordType'] = 'recordTypes';
+            typeTagNameMap['SharingCriteriaRule'] = 'sharingCriteriaRules';
+            typeTagNameMap['SharingOwnerRule'] = 'sharingOwnerRules';
+            typeTagNameMap['SharingReason'] = 'sharingReasons';
+            typeTagNameMap['WorkflowTask'] = 'tasks';
+            typeTagNameMap['ValidationRule'] = 'validationRules';
+            typeTagNameMap['WebLink'] = 'webLinks';
+
+            var typeParantTagNameMap = {};
+            typeParantTagNameMap['AssignmentRule'] = 'AssignmentRules';
+            typeParantTagNameMap['AutoResponseRule'] = 'AutoResponseRules';
+            typeParantTagNameMap['WebLink'] = 'CustomObject';
+            typeParantTagNameMap['FieldSet'] = 'CustomObject';
+            typeParantTagNameMap['ListView'] = 'CustomObject';
+            typeParantTagNameMap['RecordType'] = 'CustomObject';
+            typeParantTagNameMap['CustomField'] = 'CustomObject';
+            typeParantTagNameMap['CompactLayout'] = 'CustomObject';
+            typeParantTagNameMap['SharingReason'] = 'CustomObject';
+            typeParantTagNameMap['ValidationRule'] = 'CustomObject';
+            typeParantTagNameMap['BusinessProcess'] = 'CustomObject';
+            typeParantTagNameMap['CustomLabel'] = 'CustomLabels';
+            typeParantTagNameMap['EscalationRule'] = 'EscalationRules';
+            typeParantTagNameMap['ManagedTopic'] = 'ManagedTopics';
+            typeParantTagNameMap['MatchingRule'] = 'MatchingRules';
+            typeParantTagNameMap['SharingOwnerRule'] = 'SharingRules';
+            typeParantTagNameMap['SharingCriteriaRule'] = 'SharingRules';
+            typeParantTagNameMap['WorkflowRule'] = 'Workflow';
+            typeParantTagNameMap['WorkflowTask'] = 'Workflow';
+            typeParantTagNameMap['WorkflowAlert'] = 'Workflow';
+            typeParantTagNameMap['WorkflowKnowledgePublish'] = 'Workflow';
+            typeParantTagNameMap['WorkflowFieldUpdate'] = 'Workflow';
+            typeParantTagNameMap['WorkflowOutboundMessage'] = 'Workflow';
+            
+
+            var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+            var childObj = {};
+            var parentObj = x2js.xml_str2json(data);
+
+            if(parentObj[typeParantTagNameMap[metaType]] != undefined)
+            {
+                var tempObj = parentObj[typeParantTagNameMap[metaType]];
+                if(tempObj[typeTagNameMap[metaType]] != undefined)
+                {
+                    var childDetails = tempObj[typeTagNameMap[metaType]];
+                    var childTypeActualName = fullName.indexOf('.') > -1 ? (fullName.substring(fullName.indexOf('.') + 1,fullName.length)) : fullName;
+                    console.log('childTypeActualName-'+childTypeActualName);
+                    if(Array.isArray(childDetails))
+                    {
+                        for(var index = 0; index < childDetails.length; index++)
+                        {
+                            var childVal = childDetails[index];
+                            if(childVal != undefined && childVal.fullName == childTypeActualName)
+                            {
+                                var childLiObj = {};
+                                childLiObj._xmlns = parentObj[typeParantTagNameMap[metaType]]._xmlns;
+
+                                var childLi = [];
+                                childLi.push(childVal);
+                                childLiObj[typeTagNameMap[metaType]] = childLi;
+                                childObj[typeParantTagNameMap[metaType]] = childLiObj;
+
+                                var childXmlBeforeFormat = x2js.json2xml_str(childObj);
+                                childXmlBeforeFormat ='<?xml version="1.0" encoding="UTF-8"?>'+childXmlBeforeFormat;
+                                if(childXmlBeforeFormat != undefined)
+                                    return childXmlBeforeFormat;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if(childDetails != undefined && childDetails.fullName == childTypeActualName)
+                        {
+                            var childLiObj = {};
+                            childLiObj._xmlns = parentObj[typeParantTagNameMap[metaType]]._xmlns;
+
+                            var childLi = [];
+                            childLi.push(childDetails);
+                            childLiObj[typeTagNameMap[metaType]] = childLi;
+                            childObj[typeParantTagNameMap[metaType]] = childLiObj;
+
+                            var childXmlBeforeFormat = x2js.json2xml_str(childObj);
+                            childXmlBeforeFormat ='<?xml version="1.0" encoding="UTF-8"?>'+childXmlBeforeFormat;
+                            if(childXmlBeforeFormat != undefined)
+                                return childXmlBeforeFormat;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+    </script>
+</apex:page>

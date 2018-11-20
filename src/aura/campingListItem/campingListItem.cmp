@@ -1,0 +1,46 @@
+<aura:component >
+    <aura:attribute name="item" type="Camping_Item__c"/>
+    
+    <!-- use same event type or package format 'structure' to add or update -->
+    <aura:registerEvent name="updateItem" type="c:addItemEvent"/>
+    <!-- this component can send/fire events -->
+    <!-- campingList receives and handles it -->
+    
+    <!-- SLDS markup to give style -->
+    <div class="slds-card">
+        
+        <!-- Color the item green if the expense is reimbursed -->
+        <div class="{!v.item.Packed__c == true ?
+                    'slds-theme--success' : 'slds-theme--warning'}">
+            
+            <header class="slds-card__header slds-grid grid--flex-spread">
+                <a aura:id="item" href="{!'/' + v.item.Id}">
+                    <h3>{!v.item.Name}</h3>
+                </a>
+            </header>
+            
+            <section class="slds-card__body">
+                <div class="slds-tile slds-hint-parent"> 
+                    
+                    <!--<p>Name:
+                        <ui:outputText value="{!v.item.Name}"/>
+                    </p>-->
+                    
+                    <p>Quantity:
+                        <ui:outputNumber value="{!v.item.Quantity__c}"/>
+                    </p>
+                    <p>Price:
+                        <ui:outputCurrency value="{!v.item.Price__c}"/>
+                    </p>
+                    <p>Packed?:
+                        <!--<ui:outputCheckbox value="{!v.item.Packed__c}"/>-->
+                        <ui:inputCheckbox value="{!v.item.Packed__c}"
+                                          click="{!c.clickPacked}"/>
+                    </p>
+                    
+                    <!-- SLDS markup to give style -->                  
+                </div>
+            </section>
+        </div>
+    </div> 
+</aura:component>

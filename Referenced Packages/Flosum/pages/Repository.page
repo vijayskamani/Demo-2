@@ -1,0 +1,112 @@
+<apex:page controller="Flosum.RepositoryController" tabStyle="Repository__tab" sidebar="false">
+    <c:TrackPanel />
+    <style>
+        .pagination { 
+            padding: 1%; 
+        } 
+        div .pagination { 
+            text-align: center; 
+        } 
+        td .dataCell label { 
+            font-weight: normal; 
+        } 
+        span.paginationEle { 
+            margin-left: 4px; 
+        } 
+        .pagination input { 
+            margin-left: 4px; 
+        } 
+        .outputPanelFieldLabel{
+		    color: rgb(79, 74, 96);
+   			font-size: 11px;
+		}
+		.repList{
+		    margin-left: 10px;
+		}
+    </style>
+    <c:Wait />  
+    <apex:form >
+        <apex:sectionHeader title="Repository" description="{!$Label.flosum__repository_description}"/>
+        <apex:pagemessages id="msg"/>
+        <br/>
+		<apex:outputLabel value="Repository :" />
+       	<apex:selectList label="Repository :" size="1" value="{!selectedRepository}" styleClass="repList">
+            <apex:selectOptions value="{!RepositoryOptions}" />
+            <apex:actionSupport event="onchange"  reRender="tb,msg" action="{!onSelectRepository}" oncomplete="startCount('{!JSENCODE(selectedMetadataType)}','{!JSENCODE(selectedRepository)}');" onsubmit="show();"/> 
+        </apex:selectList>
+        &nbsp;&nbsp;&nbsp;
+        <div style="float: right">
+	       	<apex:outputLink value="{!$Page.Flosum__SyncJobs}" style="text-align:right;" id="eventlink">View sync jobs</apex:outputLink>
+        </div>
+        <apex:pageblock title="Master Branch" id="tb">
+        	<apex:pageblockSection columns="1">
+        		<apex:pageblockSectionItem >
+        			<apex:outputPanel >
+        				<apex:outputLabel value="{!$Label.flosum__component_type} :" styleClass="outputPanelFieldLabel"/>&nbsp;&nbsp;&nbsp;
+			            <apex:selectList value="{!selectedMetadataType}" multiselect="false" size="1" onChange="startCount(this.value,'{!JSENCODE(selectedRepository)}');show();">
+			                <apex:selectOptions value="{!paginationMetaTypes}"/>
+			            </apex:selectList>&nbsp;&nbsp;&nbsp;
+			            <apex:inputText value="{!searchText}"/>&nbsp;&nbsp;&nbsp;
+			            <apex:commandButton action="{!componentSearch}" value="Search" onClick="show();" onComplete="hide();" reRender="tb,msg"/>
+			            <apex:commandButton onClick="show();" action="{!hideSearch}" value="Hide Search" reRender="tb,msg" rendered="{!isSearch}" onComplete="startCount('{!selectedMetadataType}','{!JSENCODE(selectedRepository)}');"/> 
+        			</apex:outputPanel>
+        		</apex:pageblockSectionItem>
+        	</apex:pageblockSection> 
+            <apex:pageblockSection columns="1">
+                <apex:pageBlocktable value="{!componentList}" var="item" rendered="{!if(componentList.size>0,true,false)}">
+                    <apex:column headerValue="{!$Label.flosum__component_name}" value="{!item.Flosum__Component_Link__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__component_type}" value="{!item.Flosum__Component_Type__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__version}" value="{!item.Flosum__Version__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__comments}" value="{!item.Flosum__Comments__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__developer}" value="{!item.Flosum__Last_Updated_By__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__changed_on}" value="{!item.Flosum__Last_Modified_Date__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__committed_by}" value="{!item.Flosum__Last_Modified_By__c}"/>
+                    <apex:column headerValue="{!$Label.flosum__committed_on}" value="{!item.Flosum__Committed_On__c}"/>
+                </apex:pageBlocktable>
+                <apex:outputPanel rendered="{!if(componentList.size > 0,true,false)}" layout="block" styleClass="pagination">
+                        <apex:commandbutton value="First" action="{!FirstPage}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+                        <apex:commandbutton value="Previous" action="{!previous}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+                        <apex:outputText value="{!paginationStr}" styleClass="paginationEle"/>
+                        <apex:commandbutton value="Next" action="{!next}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+                        <apex:commandbutton value="Last" action="{!LastPage}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+                </apex:outputPanel>
+                <apex:outputText value="No records to display." rendered="{!if(componentList.size == 0,true,false)}"/>
+            </apex:pageblockSection>
+        </apex:pageblock>
+        <apex:actionFunction name="listRecords" action="{!fillMetadataItems}" reRender="msg,tb" onComplete="hide();">
+            <apex:param assignTo="{!localCount}" value="" name="localCount"/>
+        </apex:actionFunction>
+    </apex:form>
+    <script>
+        $( document ).ready(function() {
+            show();
+            startCount('{!JSENCODE(selectedMetadataType)}','{!JSENCODE(selectedRepository)}');
+        });
+
+        function startCount(metaType,repositoryId)
+        {
+        	console.log('metaType------'+metaType);
+        	console.log('repositoryId--'+repositoryId);
+            Visualforce.remoting.Manager.invokeAction(
+                            '{!$RemoteAction.RepositoryController.countRepositoryItems}',
+                            metaType,
+                            repositoryId,
+                            handleResult   
+                        );
+        }
+        
+        function handleResult(r,e)
+        {
+            if(e.status) 
+            {
+                console.log(r);
+                listRecords(r);
+            }
+            else
+            {
+                console.log(e.message);
+                hide();
+            }
+        }
+    </script>
+</apex:page>

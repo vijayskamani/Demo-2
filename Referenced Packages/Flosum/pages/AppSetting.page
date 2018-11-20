@@ -1,0 +1,534 @@
+<apex:page controller="Flosum.AppSettingController" action="{!settingAction}" tabStyle="Settings__tab" sidebar="false" id="page">
+	<c:TrackPanel />
+	<c:Wait />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jsforce)}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+ 	<style>
+		.labestyle{
+		font-size: 91%;
+		font-weight: bold;
+		color: #333;
+		float: left;
+		margin-left: -2%;
+		padding-left:1%;
+		margin-left: -22px;
+		}
+	 	.secret
+	 	{
+			width: 82%;
+			float: right;
+	 	}
+	 	.repositoryBlockTitle
+	 	{
+	 		font-size: 14px;
+	 	}
+	 	.requiredBlockStyle{
+	 	    background-color: #c00;
+    left: -4px;
+    width: 3px;
+    top: 1px;
+    bottom: 1px;
+    display:inline;
+    	}
+    
+	</style>  
+ 	<apex:pagemessages id="msg"/>
+ 	<apex:sectionHeader title="Settings"/>
+    <apex:form >
+		<apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="hide();" immediate="true">
+            <apex:param assignTo="{!message}" value="" name="newstr"/>
+        </apex:actionfunction>
+        <apex:pageBlock title="OAuth Settings" id="authBlock">
+            <apex:pageBlockbuttons location="top">
+                <apex:commandbutton value="Create" onClick="listConnectedAppDetails();return false;" reRender="none"/>
+                <apex:commandbutton value="Cancel" immediate="true" action="{!cancel}"/>
+            </apex:pageBlockbuttons>
+            <apex:pageBlockSection columns="1">
+            	<apex:pageBlockSectionItem >
+            		<apex:outputLabel value="Connected App Name"/>
+            		<apex:outputPanel layout="block" styleClass="requiredInput" >
+                 		<apex:outputPanel layout="block" styleClass="requiredBlock"></apex:outputPanel>
+            			<apex:inputText value="{!appName}" required="true" id="appName"/>
+            		</apex:outputPanel>
+            	</apex:pageBlockSectionItem>	
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+	</apex:form>
+	<apex:form >
+        <apex:pageBlock rendered="{!leftOptionList.size != 0 || rightOptionList.size != 0}" title="{!$Label.flosum__metadata_types_setting_title}">
+           	<apex:pageBlockSection columns="1" collapsible="false">
+           	    <apex:pageBlockSectionItem >
+	           		<apex:outputpanel id="picklist" layout="block">
+		            	<c:MultiSelectComponent leftLabel="Available Metadata"
+			                leftOption="{!leftOptionList}"
+			                rightLabel="Selected Metadata"
+			                rightOption="{!rightOptionList}"
+			                size="10"
+			                width="150px"/>
+	            	</apex:Outputpanel>
+            	</apex:pageBlockSectionItem>
+           	</apex:pageBlockSection>
+           	<apex:pageBlockbuttons location="top">
+            	<apex:commandbutton value="Save" action="{!saveCustomSetting}" rerender="picklist,msg" onClick="show();" onComplete="hide();"/>
+            	<apex:commandbutton value="Cancel" immediate="true" action="{!cancel}"/>
+        	</apex:pageBlockbuttons>
+		</apex:pageBlock>
+		<apex:pageBlock rendered="{!trailLeftOptionList.size != 0 || trailRightOptionList.size != 0}" title="Component Types for Audits">
+           	<apex:pageBlockSection columns="1" collapsible="false">
+           	    <apex:pageBlockSectionItem >
+	           		<apex:outputpanel id="picklist" layout="block">
+		            	<c:MultiSelectComponent leftLabel="Ignore These Component Types"
+			                leftOption="{!trailLeftOptionList}"
+			                rightLabel="Audit These Component Types"
+			                rightOption="{!trailRightOptionList}"
+			                size="10"
+			                width="150px"/>
+	            	</apex:Outputpanel>
+            	</apex:pageBlockSectionItem>
+           	</apex:pageBlockSection>
+           	<apex:pageBlockbuttons location="top">
+            	<apex:commandbutton value="Save" action="{!saveAuditCustomSetting}" rerender="picklist,msg" onClick="show();" onComplete="hide();"/>
+            	<apex:commandbutton value="Cancel" immediate="true" action="{!cancel}"/>
+        	</apex:pageBlockbuttons>
+		</apex:pageBlock>
+		<apex:pageBlock title="{!$Label.flosum__reset_settings_section_title}">
+        	<apex:commandbutton value="{!$Label.flosum__reset_settings_button_label}" action="{!redirectToPostInstallScript}" rerender="msg"/>
+		</apex:pageBlock>
+		<apex:pageBlock title="{!$Label.flosum__purge_title}">
+			<p>{!$Label.flosum__purge_description}</p>
+        	<apex:commandbutton value="{!$Label.flosum__purge_button_label}" action="{!launchPatchCountBatch}" rerender="msg"/>
+        	<apex:commandbutton value="Deep Analyze Snapshots" action="{!redirectToMassDeleteSnapshot}" style="margin-left: inherit"/>
+		</apex:pageBlock>
+	</apex:form>
+	<apex:form id="form3">
+		<apex:pageBlock title="Repository" id="repBlock">
+				<apex:pageBlockSection columns="1" >	
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="Repository" />
+						<apex:selectList size="1" value="{!selectedRepository}">
+		        	        <apex:selectOptions value="{!repositoryOptions}" />
+		            	    <apex:actionSupport event="onchange" action="{!listRepositorySettings}" onsubmit="show();" oncomplete="hide();" reRender="repBlock,msg"/>
+			            </apex:selectList>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem rendered="{!selectedRepository == null && selectedRepository == ''}">
+						<apex:outputLabel value="Repository Name" />
+						<apex:outputpanel id="picklist" layout="block">
+							<div class="requiredBlockStyle">&nbsp;
+							<apex:inputText value="{!repDetail.Name}" />
+							</div>
+						</apex:outputpanel>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<p class="repositoryBlockTitle">Select the users who can commit to this Repository</p>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+		           		<apex:outputpanel id="picklist" layout="block">
+			            	<c:MultiSelectComponent leftLabel="Available Users"
+				                leftOption="{!leftUserList}"
+				                rightLabel="Selected Users"
+				                rightOption="{!RightUserList}"
+				                size="10"
+				                width="150px"/>
+		            	</apex:Outputpanel>
+	            	</apex:pageBlockSectionItem>
+				</apex:pageBlockSection>
+			<apex:pageBlockSection columns="2" id="pbsExt">
+				<apex:pageBlockSection columns="1" >
+					<apex:pageBlockSectionItem >
+						<p class="repositoryBlockTitle">Automated Builds for this Repository</p>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputPanel >
+							<p>This is an optional step and it is not mandatory to register a build organization(s) for every repository.</p><br/>
+							<p>After commit to the repository/branches, the components are automatically deployed to the build organization(s) registered below, in the same order as they listed</p>
+							<p>After the deployment is complete, the tests are run depending on the "Run Tests" option chosen below.</p>
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+	        		<apex:pageBlockSectionItem >
+						<apex:outputPanel >
+				        	<apex:outputLabel value="Pipeline Deployment mode" />&nbsp;&nbsp;&nbsp;
+							<apex:selectList size="1" value="{!repDetail.Flosum__Deployment_Mode__c}" id="selList4">
+				                <apex:selectOptions value="{!modeOption}"/>
+				            </apex:selectList>
+				        	<div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body">STAND BY - Pipeline Deployment is turned off;<br/> 
+	        							DEPLOY - Deploy changes to build organization(s);<br/>
+	        							VALIDATE - Validate changes on build organization(s);
+	        							</div>
+	   							    </div>
+	   						</div>	    
+			            </apex:outputPanel>
+			        </apex:pageBlockSectionItem>
+	        		<apex:pageBlockSectionItem >
+						<apex:outputPanel >
+				        	<apex:outputLabel value="Pipeline Deployment style" />&nbsp;&nbsp;&nbsp;
+							<apex:selectList size="1" value="{!repDetail.Flosum__Deployment_Style__c}" id="selList3">
+				                <apex:selectOptions value="{!deploymentOption}"/>
+				            </apex:selectList>
+			            </apex:outputPanel>
+			        </apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputPanel >
+						<apex:outputLabel value="Use external service for deployment" />&nbsp;&nbsp;&nbsp;
+						<apex:inputCheckBox value="{!isExtDeployment}"   id="chkBox0" />
+						</apex:outputPanel>
+					</apex:pageBlockSectionItem>
+	            	<apex:pageBlockSectionItem >
+		           		<apex:outputpanel id="picklist" layout="block">
+			            	<c:MultiSelectComponent leftLabel="Available Organizations"
+				                leftOption="{!leftOrgsList}"
+				                rightLabel="Selected Organizations"
+				                rightOption="{!RightOrgsList}"
+				                size="10"
+				                width="150px"
+				                showUpDownButtons="true"/>
+		            	</apex:Outputpanel>
+	            	</apex:pageBlockSectionItem>
+	        		<apex:pageBlockSectionItem >
+						<apex:outputPanel >
+			        	<apex:outputLabel value="{!$Label.flosum__run_test_label}" />&nbsp;&nbsp;&nbsp;
+						<apex:selectList size="1" value="{!selectedRunTest}" id="selList1">
+			                <apex:selectOptions value="{!runTestOption}"/>
+			                <apex:actionSupport event="onchange" onsubmit="show();" oncomplete="hide();"   reRender="repBlock"/>
+			            </apex:selectList>
+			            </apex:outputPanel>
+			        </apex:pageBlockSectionItem>
+		        	<apex:pageBlockSectionItem rendered="{!selectedRunTest == 'RunSpecifiedTests'}">
+			        	<apex:outputPanel ></apex:outputPanel>
+			        	<apex:inputTextarea value="{!specifiedTests}" id="specifiedTests" rows="5" cols="80" styleClass="disableitem"/>
+			        </apex:pageBlockSectionItem>
+				</apex:pageBlockSection>
+			</apex:pageBlockSection>
+			<apex:pageBlockbuttons location="top">
+            	<apex:commandbutton value="Save" onclick="show();" oncomplete="hide();" action="{!saveRepositoryDetail}" reRender="msg,repBlock"/>
+        	</apex:pageBlockbuttons>
+		</apex:pageBlock>
+	</apex:form>
+	<apex:form id="form4">
+	<apex:pageBlock title="Source Code Analyzer"  id="PMDServiceSection">
+		<apex:pageBlockbuttons location="top">
+           	<apex:commandbutton value="Save" onclick="show();" oncomplete="hide();" action="{!saveAnalyzerDetail}" reRender="msg,PMDServiceSection"/>
+        </apex:pageBlockbuttons>
+ 		<apex:outputLabel value="Make code review on each commit to branch" />&nbsp;&nbsp;&nbsp;
+        <apex:inputCheckBox value="{!isCodeAnalysis}"   id="chkBox10" />
+		<apex:pageBlockSection columns="2" id="pbsExtAnalyse">
+  	       <apex:pageBlockSection columns="1" id="componentsSection"> 
+					<p class="repositoryBlockTitle">Component types to review</p>
+                	<apex:pageBlockSectionItem >
+    		           	<apex:outputpanel id="picklist2" layout="block" style="padding-left: 50px;">
+			            	<c:MultiSelectComponent leftLabel="Available Types"
+				                leftOption="{!leftCompList}"
+				                rightLabel="Selected Types"
+				                rightOption="{!RightCompList}"
+				                size="10"
+				                width="150px"/>
+		            	</apex:Outputpanel>
+	            	</apex:pageBlockSectionItem>
+  		  	</apex:pageBlockSection>
+        </apex:pageBlockSection>	
+    </apex:pageBlock>
+	</apex:form>
+	<apex:form id="form5">
+	<apex:pageBlock title="External service settings"  id="HerokuServiceSection">
+		<apex:pageBlockbuttons location="top">
+           	<apex:commandbutton value="Save" onclick="show();" oncomplete="hide();" action="{!saveHerokuDetails}" reRender="msg,HerokuServiceSection"/>
+        </apex:pageBlockbuttons>
+		            <apex:pageBlockSection columns="2" >
+        		        <apex:inputField value="{!hCred.Flosum__Username_Resource__c}" required="false" id="UsernameResource"/>
+						<apex:inputField value="{!hCred.Flosum__Password_Resource__c}"  required="false" id="PasswordResource"/>
+		                <apex:inputField value="{!hCred.Flosum__AccessPoint__c}" style="width:400px;" required="false" html-placeholder="https://your-app-name.herokuapp.com" id="AccessPoint2"/>
+        		    </apex:pageBlockSection>
+	</apex:pageBlock>
+	</apex:form>
+    <script>
+    	Visualforce.remoting.timeout = 120000;
+    	var flosumsf = jsforce;
+    	var apiVersion = 38;
+    	
+    	$( document ).ready(function() {
+			if('{!PlaceOfException}' == 'ERROR')
+			    listRemoteSiteSetting('{!baseUrl}','{!PlaceOfException}');
+			else
+				hide();
+		});
+		
+		// updates visibility of page's sections
+		function updateSectionUI(isVisible){
+			console.log('isVisible='+isVisible);
+			var selected = document.getElementById("page:form3:serviceSection");
+			if (selected != undefined){
+				if (isVisible === 'false'){
+					selected.style.display = 'none';
+				}else{
+					selected.style.display = 'block';
+				}
+			}
+		}
+		
+		function listConnectedAppDetails()
+		{
+			show();
+			var appName = $("[id$='appName']").val();
+			console.log('appName:-'+appName);
+			if(appName != undefined && appName.trim() != '')
+    		{
+				Visualforce.remoting.Manager.invokeAction(
+	                '{!$RemoteAction.AppSettingController.getAppDetails}',
+	                appName,
+	                function(r,e){
+	                	if(e.status && r) 
+            			{
+            				console.log(r);
+            				createNewApp(r);
+            			}
+            			else
+            			{
+            				console.log(e.message);
+            				showMessage(e.message);
+            			}
+	                }   
+	            );
+	    	}
+	    	else
+	    		showMessage('Please fill connected app name.');
+		}
+		
+		function createNewApp(app)
+    	{
+    		console.log(app);
+    		var selfConn = new flosumsf.Connection({ accessToken: '{!$API.Session_Id}' });
+    		selfConn.metadata.pollTimeout = 300000;
+        	selfConn.metadata.pollInterval = 30000;
+        	if(app != undefined)
+    		{
+    			selfConn.metadata.create('ConnectedApp',app,function(err2,result2){
+           				if(err2) 
+		            	{
+		            		console.log(err2);
+		            		if(err2.message != undefined)
+		            		{
+		            			console.log(err2.message);
+		            			showMessage(err2.message);
+		            		}
+		            	}
+		            	else
+		            	{
+		            		console.log(result2);
+		            		if(result2 != undefined && result2.success)
+		            		{
+		            			console.log('Created Successfully.');
+		            			Visualforce.remoting.Manager.invokeAction(
+					                '{!$RemoteAction.AppSettingController.updateAuthDetails}',
+					                app.fullName,
+					                app.oauthConfig.consumerKey,
+					                app.oauthConfig.consumerSecret,
+					                function(r,e){
+					                	console.log(r);
+					                	if(e.status) 
+				            			{
+				            				if(r != undefined && r.length > 1)
+				            				{
+					            				console.log('Updated Successfully.');
+					            				//Allow from 2-10 minutes for your changes to take effect on the server before using the connected app.
+					            				//showMessage('Connected app created successfully on '+r+'. It will take 2-10 minutes for your changes to take effect on the server before using the connected app.#confirm');
+					            				var messageSTR1 = 'Connected App '+app.fullName+' was created at ' + r[0] + '. Please wait for 10 mins (till ' + r[1] + ') to connect your orgs to Flosum.';
+					            				var messageSTR2 = 'Connected App '+app.fullName+' was created at ' + r[0] + '.';
+				            					showMessageJS(messageSTR1,'CONFIRM','red');
+				            					setTimeout(function(){showMessageJS(messageSTR2,'CONFIRM','black');},600000);
+				            				}
+				            			}
+				            			else
+				            			{
+				            				console.log(e.message);
+				            				showMessage(e.message);
+				            			}
+					                }   
+					            );
+		            		}
+		            		else
+		            		{
+		            			if(result2 != undefined && result2.errors != undefined)
+		            			{
+									if(result2.errors.message != undefined)
+									{
+										console.log(result2.errors.message);
+										var errorMsg = result2.errors.message;
+										var msg = 'duplicate value found: <unknown> duplicates value on record with id: <unknown>';
+										if(errorMsg.indexOf(msg) > -1)
+											showMessage('A connected app with the same name already exists. Please create a connected app with the new name.');
+										else
+											showMessage(errorMsg);
+									}
+									else
+									{
+										console.log(JSON.stringify(result2.errors));
+										showMessage(JSON.stringify(result2.errors));
+									}
+		            			}
+		            		}
+		            	}
+           		});
+    		}
+    	}
+		
+		function listRemoteSiteSetting(RSURL,placeOfEX)
+		{
+			var reg = /[^a-zA-Z0-9]+/g
+		    var host = RSURL;
+		    var fullName = RSURL.slice(8,RSURL.indexOf('.visual.force.com'));
+		    fullName = fullName.replace(reg,'');
+			var ExistingNames = {};
+			var selfConn = new flosumsf.Connection({ accessToken: '{!$API.Session_Id}' });
+			var queryLi = [];
+        	var query = new Object();
+        	query.folder = '';
+        	query.type = 'RemoteSiteSetting';
+        	queryLi.push(query);
+        	selfConn.metadata.list(queryLi, '34.0', function(err,result){
+        		if(err) 
+            	{
+            		console.log(err);
+            	}
+            	else
+            	{
+            		if(Array.isArray(result))
+           			{
+           				for(var index in result)
+           				{
+           					if(index < result.length)
+           					{
+           						var mi = result[index];
+           						ExistingNames[mi.fullName]= mi.fullName;
+           					}
+           				}
+           			}
+           			else
+           			{
+           				ExistingNames[result.fullName]= result.fullName;
+           			}
+           			var remoteSite = new Object();
+           			remoteSite.fullName = ExistingNames[fullName] != undefined ?  getRemoteSiteName(fullName+'1',ExistingNames) : fullName;
+           			remoteSite.description = 'Metadata API Remote Site Setting for Flosum Application';
+           			remoteSite.isActive = true;
+           			remoteSite.url = host;
+           			selfConn.metadata.create('RemoteSiteSetting',remoteSite,function(err2,result2){
+           				if(err2) 
+		            	{
+		            		console.log(err2);
+		            		hide();
+		            	}
+		            	else
+		            	{
+		            		if(result2 != undefined && result2.success)
+		            		{
+		            			console.log('Created Successfully.');
+		            			location.reload();
+		            		}
+		            		else
+		            		{
+		            			console.log(JSON.stringify(result2.errors));
+		            			hide();
+		            		}
+		            	}
+           			});
+            	}
+        	});
+		}
+    	
+    	function showMessageJS(Message_Str,Message_Type,fontColor)
+		{
+        	var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+			    if(Message_Str != '')
+			    {
+				    if(Message_Type == 'ERROR')
+				    {
+				    	var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+										'<div class="message errorM3" role="alert">'+
+											'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+												'<tbody>'+
+													'<tr valign="top">'+
+														'<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+														'<td class="messageCell">'+
+															'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+																	'<h4>Error:</h4>'+
+																'</span>'+Message_Str+'<br>'+
+															'</div>'+
+														'</td>'+
+													'</tr>'+
+													'<tr>'+
+														'<td></td>'+
+														'<td></td>'+
+													'</tr>'+
+												'</tbody>'+
+											'</table>'+
+										'</div>'+
+									'</span>';
+						parentVal.append(childVal);
+				    }
+				    else if(Message_Type == 'INFO')
+				    {
+						var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+											'<div class="message infoM3" role="alert">'+
+												'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+													'<tbody>'+
+														'<tr valign="top">'+
+															'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+															'<td class="messageCell">'+
+																'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																	'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																		'<h4></h4>'+
+																	'</span>'+Message_Str+'<br>'+
+																'</div>'+
+															'</td>'+
+														'</tr>'+
+														'<tr>'+
+															'<td></td>'+
+															'<td></td>'+
+														'</tr>'+
+													'</tbody>'+
+												'</table>'+
+											'</div>'+
+										'</span>';
+						parentVal.append(childVal);
+					}
+					else if(Message_Type == 'CONFIRM')
+				    {
+						var childVal = 	'<span id="j_id0:msg:j_id15:j_id16:0:j_id17">'+
+											'<div class="message confirmM3" role="alert">'+
+												'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+													'<tbody>'+
+														'<tr valign="top">'+
+															'<td><img alt="CONFIRM" class="msgIcon" src="/s.gif" title="CONFIRM"></td>'+
+															'<td class="messageCell">'+
+																'<div id="j_id0:msg:j_id15:j_id16:0:j_id17:j_id18:j_id20" class="messageText">'+
+																	'<span id="j_id0:msg:j_id15:j_id16:0:j_id17:j_id18:j_id21">'+
+																		'<h4>Success:</h4>'+
+																	'</span>'+
+																	'<font color="'+fontColor+'">'+Message_Str+'</font>'+
+																	'<br>'+
+																'</div>'+
+															'</td>'+
+														'</tr>'+
+														'<tr>'+
+															'<td></td>'+
+															'<td></td>'+
+														'</tr>'+
+													'</tbody>'+
+												'</table>'+
+											'</div>'+
+										'</span>';
+						parentVal.append(childVal);
+					}
+				}
+			}
+			hide();
+		}
+    </script>
+</apex:page>

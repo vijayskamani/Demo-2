@@ -1,0 +1,1332 @@
+<apex:page controller="Flosum.ComponentComparisonController" sidebar="false" doctype="html-5.0" standardStylesheets="false">
+    <c:TrackPanel />
+    <c:Wait />
+    <c:CommitToPatch />
+    <c:DynamicLookupScript />
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Utility, 'JS/angular.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+    <apex:includeScript value="{!$Resource.Flosum__xmltojson}"/>
+    <apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__uisetup, '/js/jquery-ui.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.Flosum__uisetup, '/css/jquery-ui.css')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'beauty/forMatXML.js')}"/>
+    <style>
+        div .pagination {
+            text-align: center;
+        }
+        [ng\:cloak], [ng-cloak], [data-ng-cloak], [x-ng-cloak], .ng-cloak, .x-ng-cloak {
+          display: none !important;
+        }
+        .red {
+            background-color:rgba(255, 158, 158, 0.65);
+        }
+        .yellow {
+            background-color:rgba(252, 252, 164, 1);
+        }
+        a.redirectLinkForSnapComparison {
+            float: right;
+        }
+        input.addToPatchButton {
+            margin-left: 5px;
+        }
+    </style>
+    <apex:sectionHeader title="{!$Label.flosum__snapshot_comparison_title}"/>
+    <apex:form id="form">
+        <apex:actionfunction name="addToPatchItems" action="{!createPatch}" rerender="msg" onComplete="hide(); CTP_startAddToPatch('{!JSENCODE(metaIdJSON)}','{!JSENCODE(patchId)}');" >
+            <apex:param assignTo="{!metadataItemIdJSON}" value="" name="metadataItemIdJSON"/>
+        </apex:actionfunction>
+        <apex:actionfunction name="viewDetails" action="{!viewDetail}" onComplete="hide(); redirectToDetailPage('{!JSENCODE(detailPageURL)}');" rerender="msg" >
+            <apex:param assignTo="{!sourceTargetIdJSON}" value="" name="sourceTargetIdJSON"/>
+        </apex:actionfunction>
+        <apex:actionFunction name="refreshPatchesList" reRender="nameBlock,msg" oncomplete="hide();" />
+        <apex:pagemessages id="msg"/>
+        <div ng-app="SnapRepoCompare">
+            <div ng-controller ="RepositoryComparisonController" id="angularControllerId">
+                <div class="ng-cloak">
+                    <apex:pageBlock >
+                        <apex:pageBlockSection columns="1" id="allCompareBlock">
+                            <apex:pageBlockSection columns="1" rendered="{!componentTypeOptions.size > 0}">
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Component Type :"/>
+                                    <apex:selectList value="{!selectedComponentType}" multiselect="false" size="1" styleClass="disableitem" id="selectedComponentType">
+                                        <apex:selectOptions value="{!componentTypeOptions}"/>
+                                        <apex:actionSupport event="onchange" onSubmit="show();hidePagination();" reRender="allCompareBlock,msg" onComplete="startComparison('{!JSENCODE(selectedComponentType)}');" />
+                                    </apex:selectList>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Compare Different" />
+                                    <apex:inputCheckbox selected="true" disabled="true"/>
+                                </apex:pageBlockSectionItem>
+                            </apex:pageBlockSection>
+                            <apex:pageBlockSection id="nameBlock" html-ng-show="paginationList.length > 0" columns="1">
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Patch" />
+<!--                                     <apex:selectList size="1" value="{!selectedPatch}" styleClass="disableitem"> -->
+<!--                                         <apex:selectOptions value="{!patchOptions}"/> -->
+<!--                                         <apex:actionSupport event="onchange" onSubmit="show();" reRender="nameBlock,msg" onComplete="hide();" /> -->
+<!--                                     </apex:selectList> -->
+									<apex:outputPanel >
+							            <apex:inputHidden id="patchTargetId" value="{!selectedPatch}"/>
+							            <apex:inputText size="25"  id="patchTargetName" onFocus="this.blur()" disabled="false" html-callitafterchange="refreshPatchesList"/>           
+						  		    	<img src="/s.gif" 
+							            onclick="dlm_openLookupPopup('{!$Component.patchTargetName}','{!$Component.patchTargetId}','{!$ObjectType.Patch__c.Name}',''); return false" 
+							            class="lookupIcon disableitem" 
+							            onmouseout="this.className='lookupIcon';" 
+							            alt="Patch Name Lookup (New Window)" 
+							            onmouseover="this.className='lookupIconOn';"/>
+						  		    </apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem rendered="{!If(selectedPatch == null || selectedPatch == '',true,false)}">
+                                    <apex:outputLabel value="Patch Name" />
+                                    <apex:inputText value="{!patchName}" styleClass="disableitem"/>
+                                </apex:pageBlockSectionItem>
+                            </apex:pageBlockSection>
+                        </apex:pageBlockSection>
+                        <apex:pageBlockSection columns="1">
+                            <div id="progressbar" class="flpbar"></div>
+                        </apex:pageBlockSection>
+                        <apex:pageBlockSection html-ng-show="paginationList.length > 0" columns="1">                    
+                            <div>
+                                <apex:pageBlockSection columns="1">
+                                    <apex:outputPanel >
+                                        <apex:commandbutton value="View Detail" onClick="show(); return false;" html-ng-click="viewDetails();" reRender="msg" styleClass="disableitem"/>
+                                        <apex:commandbutton value="Add to Patch" onClick="return false;" html-ng-click="createPatchFromSelected();" reRender="msg" styleClass="addToPatchButton disableitem"/>
+                                    </apex:outputPanel>
+                                    <apex:outputPanel >
+                                    	<input type="checkbox" ng-click="selectDeselectAll(isAllSelected,paginationList)" class="asli" ng-model="isAllSelected"/>&nbsp;
+                                    	<apex:outputLabel value="Select / Deselect All"/>
+                                    </apex:outputPanel>
+                                    <table ng-show="paginationList.length > 0" class="list">
+                                        <thead>
+                                            <tr class="headerRow">
+                                                <th><input type="checkbox" ng-click="checkItemAll(isAllChecked,(paginationList| orderBy: orderByColumn :isReverse | limitTo: viewLimit),metaOffSet);" class="psli" ng-model="isAllChecked" >&nbsp;</input></th>
+                                                <th ng-repeat = "(key, value) in fieldSet">
+                                                	{{fieldName = key == 'changedOn' ? 'LastModifiedDate' : key; ""}}
+                                                	{{fieldName = fieldName == 'targetChangedOn' ? 'targetLastModifiedDate' : fieldName; ""}}
+                                                	
+                                                	{{fieldLabel = fieldName == 'LastModifiedDate' ? value+' ('+sourceName+')' : value; ""}}
+                                                	{{fieldLabel = fieldName == 'targetLastModifiedDate' ? fieldLabel+' ('+targetName+')' : fieldLabel; ""}}
+                                                	
+                                                	{{fieldLabel = orderByColumn == fieldName ? isReverse ? fieldLabel+' ▼' : fieldLabel+' ▲' : fieldLabel; ""}}
+                                                    <a ng-click="refreshOrderBy(fieldName)">{{ fieldLabel }}</a>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr ng-repeat = "meta in paginationList | orderBy: orderByColumn :isReverse | limitTo: viewLimit" ng-if="$index >= metaOffSet" class="{{meta.rowType == 'BothSide' ? 'dataRow yellow' : 'dataRow red'}}" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} " on-finish-render="ngRepeatFinished">
+                                                <td><input type="checkbox" class="sli" ng-click="checkUnCheck((paginationList | orderBy: orderByColumn :isReverse | limitTo: viewLimit),metaOffSet);" ng-model="meta.checked"/></td>
+                                                <td ng-repeat = "(key, value) in fieldSet">
+                                                            {{ meta[key] }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </apex:pageBlockSection>
+                                <apex:outputPanel html-ng-show="paginationList.length > 0" styleClass="pagination" layout="block">
+                                    <apex:commandbutton html-ng-click="showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="isPrevious();"/>
+                                    <apex:commandbutton html-ng-click="listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="isPrevious();"/>
+                                    Total {{(paginationList).length}} components, Page {{currentPageNo((paginationList).length)}} of {{totalPageCount((paginationList).length)}}
+                                    <apex:commandbutton html-ng-click="listNext((paginationList).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="isNext((paginationList).length);"/>
+                                    <apex:commandbutton html-ng-click="showLast((paginationList).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="isNext((paginationList).length);"/>
+                                </apex:outputPanel>
+                            </div>
+                        </apex:pageBlockSection>
+                    </apex:pageBlock>
+                </div>
+            </div>
+        </div>
+    </apex:form>
+    <script>
+        Visualforce.remoting.timeout = 120000;
+        var selectedSourceSnapshot = '{!JSENCODE(selectedSourceSnapshot)}';
+        var selectedTargetSnapshot = '{!JSENCODE(selectedTargetSnapshot)}';
+        var selectedComponentType;
+        var sourceName = '{!JSENCODE(sourceSnapshotName)}';
+        var targetName = '{!JSENCODE(targetSnapshotName)}';
+        
+        var sourceItems = [];
+        var targetItems = [];
+        var attachmentIdMap = {};
+        var currentAttIds = [];
+        var currentAttIndex = 0;
+        var snapshotCrcMap = {};
+        var normalZip = new JSZip();
+        
+        var mmap = new Object();
+        mmap['CustomField'] = true;
+        mmap['CustomLabel'] = true;
+        mmap['CompactLayout'] = true;
+        mmap['WebLink'] = true;
+        mmap['RecordType'] = true;
+        mmap['ListView'] = true;
+        mmap['FieldSet'] = true;
+        mmap['AssignmentRule'] = true;
+        mmap['AutoResponseRule'] = true;
+        mmap['ValidationRule'] = true;
+        mmap['WorkflowTask'] = true;
+        mmap['WorkflowOutboundMessage'] = true;
+        mmap['WorkflowFieldUpdate'] = true;
+        mmap['WorkflowKnowledgePublish'] = true;
+        mmap['WorkflowAlert'] = true;
+        mmap['WorkflowRule'] = true;
+        
+        mmap['SharingOwnerRule'] = true;
+        mmap['SharingCriteriaRule'] = true;
+        mmap['BusinessProcess'] = true;
+        mmap['SharingReason'] = true;
+        mmap['EscalationRule'] = true;
+        mmap['MatchingRule'] = true;
+        mmap['ManagedTopic'] = true;
+        
+        var folderMap = new Object();
+        folderMap['DocumentFolder'] = 'Document';
+        folderMap['DashboardFolder'] = 'Dashboard';
+        folderMap['ReportFolder'] = 'Report';
+        folderMap['EmailFolder'] = 'EmailTemplate';
+        
+        var bundleTypes = {};
+        bundleTypes['AuraDefinitionBundle'] = 'AuraDefinitionBundle';
+                
+        var myApp = angular.module("SnapRepoCompare", []);
+        myApp.controller("RepositoryComparisonController", ['$scope', function($scope) {
+            //Pagination variables.
+            $scope.sourceName = '';
+            $scope.targetName = '';
+            $scope.paginationList = [];
+            $scope.orderByColumn = 'componentName';
+            $scope.isReverse = false;
+            $scope.metaOffSet = 0;
+            $scope.staticLimit = 20;
+            $scope.viewLimit = $scope.staticLimit;
+            var tempObj = {};
+            //tempObj['id'] = 'Id';
+            tempObj['type'] = 'Component Type';
+            tempObj['fullName'] = 'Component Name';
+            tempObj['changedOn'] = 'Changed On';
+            tempObj['targetChangedOn'] = 'Changed On';
+            $scope.fieldSet = tempObj;
+            $scope.$on('ngRepeatFinished', function(ngRepeatFinishedEvent) {
+                var checkboxes = document.getElementsByClassName('sli');
+                if(checkboxes != undefined && checkboxes.length > 0)
+                {
+                    var allUnChecked = true;
+                    var allChecked = true;
+                    for(var i = 0; i < checkboxes.length; i++) 
+                    {
+                        if(checkboxes[i].type == 'checkbox' && checkboxes[i].checked) 
+                        {
+                            allUnChecked = false;
+                        }
+                        else if(checkboxes[i].type == 'checkbox' && !checkboxes[i].checked)
+                        {
+                            allChecked = false;
+                        }
+                    }
+                    if(allChecked)
+                    {
+                        var parentCheckboxes = document.getElementsByClassName('psli');
+                        if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+                        {
+                            parentCheckboxes[0].checked = true;
+                        }
+                    }
+                    else if(allUnChecked || (!allUnChecked && !allChecked))
+                    {
+                        var parentCheckboxes = document.getElementsByClassName('psli');
+                        if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+                        {
+                            parentCheckboxes[0].checked = false;
+                        }
+                    }
+                }
+                //you also get the actual event object
+                //do stuff, execute functions -- whatever...
+            });
+            /*$scope.showCompareLink = function(idOne,IdTwo){
+                var result = idOne != undefined && IdTwo != undefined;
+                return result;
+            };
+            $scope.callCompare = function(idOne,IdTwo){
+                OpenInNewTab(viewDetailUrl+'?branchCompHisId='+idOne+'&metaId='+IdTwo+'&fromMerge=fromCommit');
+            };*/
+            $scope.clearPagination = function() {
+                $scope.$apply(function() {
+                    $scope.paginationList = [];
+                });
+            };
+            
+            $scope.showPagination = function(tempLi) {
+                $scope.$apply(function() {
+                	$scope.sourceName = sourceName;
+                	$scope.targetName = targetName;
+                    $scope.metaOffSet = 0;
+                    $scope.viewLimit = $scope.staticLimit;
+                    $scope.orderByColumn = 'componentName';
+                    $scope.isReverse = false;
+                    var tempObj = {};
+                    tempObj['type'] = 'Component Type';
+                    tempObj['fullName'] = 'Component Name';
+                    tempObj['changedOn'] = 'Changed On';
+                    tempObj['targetChangedOn'] = 'Changed On';
+                    $scope.fieldSet = tempObj;
+                    $scope.paginationList = tempLi;
+                    var pb = $("#progressbar");
+                    if(pb != undefined)
+                        pb.progressbar( "destroy" );
+                    if($scope.paginationList.length == 0)
+                        setInfoMessageOnPage('No different components found.');
+                    enableFlosumUI();
+                });
+            };
+            
+            $scope.checkItemAll = function(isAllChecked,compLi,offset) {
+                 for(var index = offset ; index < (offset+$scope.staticLimit) && index < compLi.length  ; index++) {
+                    if(isAllChecked)
+                        compLi[index].checked = true;
+                    else
+                        compLi[index].checked = false;  
+                 }
+            };
+            
+            $scope.selectDeselectAll = function(isAllSelected,compLi) {
+            	var parentCheckboxe = document.getElementsByClassName('psli');
+            	parentCheckboxe[0].checked = isAllSelected;
+            	for(var index = 0 ; index < compLi.length  ; index++) {
+                    if(isAllSelected)
+                    	compLi[index].checked = true;
+                    else
+                    	compLi[index].checked = false;
+                 }
+            }
+            
+            $scope.createPatchFromSelected = function() {
+                var metadataItemIdMap = {};
+                for(var index = 0; index < $scope.paginationList.length; index++)
+                {
+                    var meta = $scope.paginationList[index];
+                    if(meta.checked)
+                    {
+                        if(meta.contentId != undefined && meta.contentId != '')
+                        	metadataItemIdMap[meta.compId] = meta.compId;
+                    }  
+                }
+                if(!isMapEmpty(metadataItemIdMap))
+                    addToPatchItems(JSON.stringify(metadataItemIdMap));
+                else
+                    showMessage('Please select a component.');
+            };
+            
+            $scope.viewDetails = function() {
+                var sourceTargetIdMap = {};
+                
+                for(var index = 0; index < $scope.paginationList.length; index++)
+                {
+                    var meta = $scope.paginationList[index];
+                    if(meta.checked)
+                    {
+                        if(meta.targetCompId != undefined && meta.targetCompId != '')
+                            sourceTargetIdMap[meta.compId] = meta.targetCompId;
+                        else
+                        	sourceTargetIdMap[meta.compId] = '';
+                    }  
+                }
+                if((!isMapEmpty(sourceTargetIdMap)))
+                    viewDetails(JSON.stringify(sourceTargetIdMap));
+                else
+                    showMessage('Please select a component.');
+            };
+            
+            $scope.checkUnCheck = function(compLi,offset) {
+                var flag = true;
+                var index;
+                for(var index = offset ; index < (offset+$scope.staticLimit) && index < compLi.length  ; index++) {
+                    if( ! compLi[index].checked ) {
+                        flag = false;
+                        break;
+                    }
+                }
+                $scope.isAllChecked = flag ;
+                return flag;
+            };
+            
+            $scope.defaultNextPrevious = function(){
+                $scope.isAllChecked = false ;
+            }
+            
+            $scope.refreshOrderBy = function(orderVal) {
+                $scope.metaOffSet = 0;
+                $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                if(orderVal == $scope.orderByColumn)
+                    $scope.isReverse = !$scope.isReverse;
+                else
+                {
+                    $scope.isReverse = false;
+                    $scope.orderByColumn = orderVal;
+                }
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.showFirst = function() {
+                $scope.metaOffSet = 0;
+                $scope.viewLimit = $scope.staticLimit;
+                $scope.defaultNextPrevious();    
+            };
+            
+            $scope.listPrevious = function() {
+                $scope.metaOffSet = $scope.metaOffSet - $scope.staticLimit;
+                if($scope.metaOffSet < 0)
+                    $scope.metaOffSet = 0;
+                $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.listNext = function(tempTotal) {
+                if(($scope.metaOffSet + $scope.staticLimit) < tempTotal)
+                {
+                    $scope.metaOffSet = $scope.metaOffSet + $scope.staticLimit;
+                    $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                }
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.showLast = function(tempTotal) {
+                $scope.metaOffSet = tempTotal - (tempTotal % $scope.staticLimit);
+                if($scope.metaOffSet == tempTotal && $scope.metaOffSet != 0)
+                    $scope.metaOffSet = tempTotal - $scope.staticLimit;
+                $scope.viewLimit = $scope.metaOffSet + $scope.staticLimit;
+                $scope.defaultNextPrevious();
+            };
+            
+            $scope.isPrevious = function() {
+                if($scope.metaOffSet < 1) 
+                    return true;
+                else
+                    return false;
+            };
+            
+            $scope.isNext = function(tempTotal){
+                if(tempTotal > $scope.metaOffSet+$scope.staticLimit)
+                    return false;
+                else 
+                    return true;
+            };
+            
+            $scope.totalPageCount = function(tempTotal){
+                var totalPage = parseInt(tempTotal % $scope.staticLimit > 0 ? (tempTotal / $scope.staticLimit)+1 : (tempTotal / $scope.staticLimit));
+                return totalPage;
+            };
+            
+            $scope.currentPageNo = function(tempTotal){
+                var currentPage = 1;
+                if($scope.metaOffSet <  $scope.staticLimit)
+                    currentPage =  1;
+                else
+                    currentPage = Math.ceil($scope.metaOffSet / $scope.staticLimit)+1;
+                return currentPage;
+            };
+        }]);
+        
+        function redirectToDetailPage(detailPageURL)
+        {
+        	if(detailPageURL != undefined)
+        		window.open(detailPageURL,'_blank');
+        }
+        
+        function startComparison(tempType) {
+            sourceItems = [];
+            targetItems = [];
+            selectedComponentType = tempType;
+            attachmentIdMap = {};
+            currentAttIds = [];
+            currentAttIndex = 0;
+            if(selectedComponentType != null && selectedComponentType != undefined && selectedComponentType != '') {
+                disableFlosumUI();
+                showProgress(1);
+                console.log(selectedComponentType);
+                listSourceComponents(selectedComponentType);
+            }
+            hide();
+        }
+        
+        function listSourceComponents(selectedComponentType) {
+        	listComponents(selectedSourceSnapshot, selectedComponentType, '', handleSourceComponents);
+        }
+        
+        function listTargetComponents(selectedComponentType) {
+        	listComponents(selectedTargetSnapshot, selectedComponentType, '', handleTargetComponents);
+        }
+        
+        function listComponents(param1,param2,param3,param4) {
+            console.log('param1'+param1);
+            console.log('param2'+param2);
+            console.log('param3'+param3);
+            //console.log('param4'+param4);
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.ComponentComparisonController.listComponents}',
+                param1,
+                param2,
+                param3,
+                param4
+            );
+        }
+        
+        function handleSourceComponents(r,e) {
+            if(e.status && r) {
+                if(r.resultLi != undefined && r.resultLi.length > 0)
+                {
+                    for(var index = 0; index < r.resultLi.length; index++)
+                    {
+                        var comp = r.resultLi[index];
+                        if(r.type == "Snapshot" && comp.contentId != undefined && comp.contentId != '')
+                            attachmentIdMap[comp.contentId] = comp.contentId;
+                        sourceItems.push(comp);
+                    }
+                }
+                if(r.isDone) 
+                    listTargetComponents(selectedComponentType);
+                else if(!r.isDone) 
+                    listComponents(r.parentId, r.compType, r.lastId, handleSourceComponents);
+            }
+            else 
+                showMessage(e.message);
+        }
+        
+        function handleTargetComponents(r,e) {
+            if(e.status && r) {
+                if(r.resultLi != undefined && r.resultLi.length > 0)
+                {
+                    for(var index = 0; index < r.resultLi.length; index++)
+                    {
+                        var comp = r.resultLi[index];
+                        if(r.type == "Snapshot" && comp.contentId != undefined && comp.contentId != '')
+                            attachmentIdMap[comp.contentId] = comp.contentId;
+                        targetItems.push(comp);
+                    }
+                }
+                if(r.isDone) 
+                    getDetailsOfAttachments();
+                else if(!r.isDone) 
+                    listComponents(r.parentId, r.compType, r.lastId, handleTargetComponents);
+            }
+            else 
+                showMessage(e.message);
+        }
+        
+        function getDetailsOfAttachments()
+        {
+            var tempIdLi = [];
+            for(var key in attachmentIdMap)
+                tempIdLi.push(key);
+            Visualforce.remoting.Manager.invokeAction(
+                '{!$RemoteAction.ComponentComparisonController.getAttachmentList}',
+                JSON.stringify(tempIdLi),
+                handleAttachmentLimit
+            );
+        }
+        
+        //To handle zip files information.
+        function handleAttachmentLimit(r,e)
+        {
+            if(e.status && r) 
+            {
+                currentAttIds = [];
+                currentAttIndex = 0;
+                if(r.length > 0)
+                {
+                    currentAttIds = r;
+                    getAttachment();
+                }
+                else
+                {
+                    showProgress(100);
+                    fillCrcForSnapshotItems();
+                }
+            }
+            else
+            {
+                showProgress(100);
+                showMessage(e.message);
+            }
+        }
+        
+        //To get zip file from snapshot and to read the crc codes of components from zip files. 
+        function getAttachment()
+        {
+            if(currentAttIndex < currentAttIds.length)
+            {
+                var ctAttIds = currentAttIds[currentAttIndex];
+                
+                Visualforce.remoting.Manager.invokeAction(
+                    '{!$RemoteAction.ComponentComparisonController.getAttachments}',
+                    JSON.stringify(ctAttIds),
+                    function handlegetAttachments(r,e){
+                        if(e.status && r){
+                            if(r.length > 0)
+                            {
+                                var attReadIndex = 0;
+                                var readFullAtt = function(){
+                                    if(attReadIndex < r.length)
+                                    {
+                                        var att = r[attReadIndex];
+                                        var parentId = att.parentId;
+                                        var metaType = att.compType;
+                                        var base64str = att.base64;
+                                        var zip = new JSZip(base64str, {base64:true});
+                                        createFileMap(metaType,zip,parentId);
+                                        attReadIndex++;
+                                        setTimeout(readFullAtt, 0005);
+                                    }
+                                    else
+                                    {
+                                        showProgress(5+(((currentAttIndex+1)/currentAttIds.length)*60));
+                                        currentAttIndex++;
+                                        getAttachment();
+                                    }
+                                }
+                                readFullAtt();
+                            }
+                            else
+                            {
+                                showProgress(100);
+                                showMessage('Some zip files are missing.');
+                            }
+                        }
+                        else
+                        {
+                            showMessage(e.message);
+                        }
+                    }
+                );
+            }
+            else
+            {
+                showProgress(65);
+                fillCrcForSnapshotItems();
+            }
+        }
+        
+        function fillCrcForSnapshotItems()
+        {
+            var finalCompareLi = [];
+            var targetCRCMap = {};
+            var metaIndex = 0;
+            var fillCRCInChunks = function() {
+                if(metaIndex < targetItems.length)
+                {
+                    for(var index=0; metaIndex < targetItems.length && index < 1000; index++)
+                    {
+                        var meta = targetItems[metaIndex];
+                        if(meta.crcCode == '')
+                        {
+                            meta.key = '';
+                            meta.crcCode = 0;
+                            if(mmap[meta.type] == undefined)
+                            {
+                                if(folderMap[meta.type] != undefined)
+                                    meta.key = meta.parentId+'#'+folderMap[meta.type]+"#"+meta.fileName;
+                                else
+                                    meta.key = meta.parentId+'#'+meta.type+"#"+meta.fileName;
+                            }
+                            else
+                                meta.key = meta.parentId+'#'+meta.type+"#"+meta.fullName;
+                            if(snapshotCrcMap[meta.key] != undefined && meta.Id != undefined)
+                            {
+                                meta.crcCode = snapshotCrcMap[meta.key];
+                                if(snapshotCrcMap[meta.key+"-meta.xml"] != undefined)
+                                    meta.crcCode = meta.crcCode+' '+snapshotCrcMap[meta.key+"-meta.xml"];
+                            }
+                            else if(bundleTypes[meta.type] != undefined)
+                            {
+                            	var bundleArr = [];      
+                                for(var mapKey in snapshotCrcMap)
+                                {
+                                    if(mapKey != undefined && mapKey.indexOf(meta.key+'/') == 0)
+                                    {
+                                        //var fName = mapKey.replace(meta.type+"#",'');
+                                        //meta.crcCode += snapshotCrcMap[mapKey];
+                                        
+                                        var descriptor = {};
+										var fName = mapKey.replace(meta.type+"#",'');
+										descriptor.fileName = fName;
+										descriptor.crc32 = snapshotCrcMap[mapKey];
+										bundleArr.push(descriptor);
+                                    }
+                                }
+                                if (bundleArr.length > 0)
+                                {
+                                	meta.crcCode = composeBundleCrc(bundleArr);
+                               	}
+                            }
+                        }
+                        if(meta.crcCode != 0)
+                        {
+                            var targetItem = {};
+                            targetItem.changedOn = meta.changedOn;
+                            targetItem.LastModifiedDate = meta.LastModifiedDate;
+                            targetItem.crcCode = ''+meta.crcCode;
+                            targetItem.compId = meta.compId;
+                            targetCRCMap[meta.type+'#'+meta.fullName] = targetItem;
+                        }
+                        metaIndex++;
+                    }
+                    setTimeout(fillCRCInChunks, 1000);
+                }
+                else
+                    setTimeout(compareCRCWithSource, 0);
+            }
+            
+            var sourceMetaIndex = 0;
+            var compareCRCWithSource = function() {
+                if(sourceMetaIndex < sourceItems.length)
+                {
+                    for(var index=0; sourceMetaIndex < sourceItems.length && index < 1000; index++)
+                    {
+                        var meta = sourceItems[sourceMetaIndex];
+                        if(meta.crcCode == '')
+                        {
+                            meta.key = '';
+                            meta.crcCode = 0;
+                            if(mmap[meta.type] == undefined)
+                            {
+                                if(folderMap[meta.type] != undefined)
+                                    meta.key = meta.parentId+'#'+folderMap[meta.type]+"#"+meta.fileName;
+                                else
+                                    meta.key = meta.parentId+'#'+meta.type+"#"+meta.fileName;
+                            }
+                            else
+                                meta.key = meta.parentId+'#'+meta.type+"#"+meta.fullName;
+                            if(snapshotCrcMap[meta.key] != undefined && meta.Id != undefined)
+                            {
+                                meta.crcCode = snapshotCrcMap[meta.key];
+                                if(snapshotCrcMap[meta.key+"-meta.xml"] != undefined)
+                                    meta.crcCode = meta.crcCode+' '+snapshotCrcMap[meta.key+"-meta.xml"];
+                            }
+                            else if(bundleTypes[meta.type] != undefined)
+                            {      
+                                /*for(var mapKey in snapshotCrcMap)
+                                {
+                                    if(mapKey != undefined && mapKey.indexOf(meta.key+'/') == 0)
+                                    {
+                                        var fName = mapKey.replace(meta.type+"#",'');
+                                        meta.crcCode += snapshotCrcMap[mapKey];
+                                    }
+                                }*/
+                                
+                                var bundleArr = [];      
+                                for(var mapKey in snapshotCrcMap)
+                                {
+                                    if(mapKey != undefined && mapKey.indexOf(meta.key+'/') == 0)
+                                    {
+                                        //var fName = mapKey.replace(meta.type+"#",'');
+                                        //meta.crcCode += snapshotCrcMap[mapKey];
+                                        
+                                        var descriptor = {};
+										var fName = mapKey.replace(meta.type+"#",'');
+										descriptor.fileName = fName;
+										descriptor.crc32 = snapshotCrcMap[mapKey];
+										bundleArr.push(descriptor);
+                                    }
+                                }
+                                if (bundleArr.length > 0)
+                                {
+                                	meta.crcCode = composeBundleCrc(bundleArr);
+                               	}
+                            }
+                        }
+                        if(meta.crcCode != 0)
+                        {
+                            var compareItem = meta;
+                            compareItem.crcCode = ''+compareItem.crcCode;
+                            if(targetCRCMap[meta.type+'#'+meta.fullName] != undefined)
+                            {
+                                var targetItem = targetCRCMap[meta.type+'#'+meta.fullName];
+                                compareItem.targetChangedOn = targetItem.changedOn;
+                                compareItem.targetLastModifiedDate = targetItem.LastModifiedDate;
+                                compareItem.targetcrcCode = targetItem.crcCode;
+                                compareItem.targetCompId = targetItem.compId;
+                            }
+                            if(compareItem.targetcrcCode == undefined)
+                            {
+                                compareItem.rowType = 'Source';
+                                finalCompareLi.push(compareItem);
+                            }
+                            else if(compareItem.crcCode != compareItem.targetcrcCode)
+                            {
+                                compareItem.rowType = 'BothSide';
+                                finalCompareLi.push(compareItem);
+                            }
+                        }
+                        sourceMetaIndex++;
+                    }
+                    setTimeout(compareCRCWithSource, 1000);
+                }
+                else
+                {
+                    showFinalComparisonUI();
+                }
+            }
+            
+            var showFinalComparisonUI = function() {
+                showProgress(100);
+                angular.element(document.getElementById('angularControllerId')).scope().showPagination(finalCompareLi);
+            }
+            fillCRCInChunks();
+        }
+        
+        function createFileMap(tempComponentType,tempZip,parentId)
+        {
+            if(tempComponentType == 'Profile' || tempComponentType == 'PermissionSet')
+            {
+                tempZip.remove('objects');
+                tempZip.remove('classes');
+                tempZip.remove('pages');
+                tempZip.remove('layouts');
+                tempZip.remove('tabs');
+                tempZip.remove('applications');
+                tempZip.remove('dataSources');
+                tempZip.remove('customPermissions');
+                for(var fileName in tempZip.files)
+                {
+                    if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0)) 
+                    {
+                        var fileData = tempZip.files[fileName].asBinary();
+                        snapshotCrcMap[parentId+'#'+tempComponentType+"#"+fileName] = getCrcWithData(fileData,{compress:true});
+                    }
+                }
+            }
+            else if(mmap[tempComponentType] == undefined)
+            { 
+                    for(var fileName in tempZip.files)
+                    {
+                        if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+                        {
+                            var fileData = tempZip.files[fileName].asBinary();
+                            snapshotCrcMap[parentId+'#'+tempComponentType+"#"+fileName] = getCrcWithData(fileData);
+                        }
+                    }
+            }
+            else
+            {
+            	for(var fileName in tempZip.files)
+                    if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined')
+                        getChildFileMap(tempComponentType,tempZip.files[fileName].asText(),fileName,parentId);
+            }
+        }
+        
+        function getChildFileMap(metaType,xml,fileName,parentId)
+        {
+            var fullName = '';
+            if(metaType != 'CustomLabel')
+                fullName = fileName.slice(fileName.indexOf("/")+1,fileName.lastIndexOf('.'))+".";
+    
+            var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+            var jsnMap ={};
+            var tempJSON = '';
+            var srcjson = x2js.xml_str2json(xml);
+            if(srcjson != undefined && srcjson != null)
+            {
+                var srcitems;
+                if(metaType == 'CustomLabel')
+                {
+                    var srcMetaItem = srcjson.CustomLabels;
+                    srcitems = srcMetaItem.labels;
+                }
+                else if(metaType == 'CustomField')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.fields;
+                }
+                else if(metaType == 'ListView')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.listViews;
+                }
+                else if(metaType == 'CompactLayout')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.compactLayouts;
+                }
+                else if(metaType == 'WebLink')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.webLinks;
+                }
+                else if(metaType == 'RecordType')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.recordTypes;
+                }
+                else if(metaType == 'FieldSet')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.fieldSets;
+                }
+                else if(metaType == 'ValidationRule')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.validationRules;
+                }
+                else if(metaType == 'AssignmentRule')
+                {
+                    var srcMetaItem = srcjson.AssignmentRules;
+                    srcitems = srcMetaItem.assignmentRule;
+                }
+                else if(metaType == 'AutoResponseRule')
+                {
+                    var srcMetaItem = srcjson.AutoResponseRules;
+                    srcitems = srcMetaItem.autoResponseRule;
+                }
+                else if(metaType == 'WorkflowTask')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.tasks;
+                }
+                else if(metaType == 'WorkflowOutboundMessage')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.outboundMessages;
+                }
+                else if(metaType == 'WorkflowFieldUpdate')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.fieldUpdates;
+                }
+                else if(metaType == 'WorkflowKnowledgePublish')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.knowledgePublishes;
+                }
+                else if(metaType == 'WorkflowAlert')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.alerts;
+                }
+                else if( metaType == 'WorkflowRule')
+                {
+                    var srcMetaItem = srcjson.Workflow;
+                    srcitems = srcMetaItem.rules;
+                }
+                else if(metaType == 'SharingCriteriaRule')
+                {
+                    var srcMetaItem = srcjson.SharingRules;
+                    srcitems = srcMetaItem.sharingCriteriaRules;
+                }
+                else if(metaType == 'SharingOwnerRule')
+                {
+                    var srcMetaItem = srcjson.SharingRules;
+                    srcitems = srcMetaItem.sharingOwnerRules;
+                }
+                else if(metaType == 'BusinessProcess')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.businessProcesses;
+                }
+                else if(metaType == 'SharingReason')
+                {
+                    var srcMetaItem = srcjson.CustomObject;
+                    srcitems = srcMetaItem.sharingReasons;
+                }
+                else if(metaType == 'EscalationRule')
+                {
+                    var srcMetaItem = srcjson.EscalationRules;
+                    srcitems = srcMetaItem.escalationRule;
+                }
+                else if(metaType == 'MatchingRule')    
+                {
+                    var srcMetaItem = srcjson.MatchingRules;
+                    srcitems = srcMetaItem.matchingRules;
+                }
+                else if(metaType == 'ManagedTopic')
+                {
+                    var srcMetaItem = srcjson.ManagedTopics;
+                    srcitems = srcMetaItem.ManagedTopic;
+                }
+                if(srcitems != undefined)
+                {
+                    if(srcitems.fullName == undefined)
+                    {   
+                        for(var i in srcitems)  
+                        {
+                            if(i < srcitems.length)
+                            {
+                                var v = srcitems[i];
+                                jsnMap[v.fullName]= JSON.stringify(v);
+                            }
+                        }            
+                    }
+                    else
+                        jsnMap[srcitems.fullName] = JSON.stringify(srcitems);
+                }
+            }
+            for(var name in jsnMap)
+            {
+                var tempXml = '';
+                var tempJSON = jsnMap[name];
+                if(tempJSON != undefined)
+                {
+                    //header
+                    if(metaType == 'CustomLabel')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'AssignmentRule' )
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><AssignmentRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'AutoResponseRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><AutoResponseRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule'  || metaType == 'WorkflowKnowledgePublish')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><SharingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'EscalationRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><EscalationRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'MatchingRule')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><MatchingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else if(metaType == 'ManagedTopic')
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><ManagedTopics xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    else
+                    {
+                        tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+                    }
+                    
+                    //body
+                    if(metaType == 'CustomLabel')
+                    {
+                        tempXml = tempXml +'<labels>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</labels>';
+                    }
+                    else if(metaType == 'CustomField')
+                    {
+                        tempXml = tempXml +'<fields>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fields>';
+                    }
+                    else if(metaType == 'ListView')
+                    {
+                        tempXml = tempXml +'<listViews>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</listViews>';
+                    }
+                    else if(metaType == 'CompactLayout')
+                    {
+                        tempXml = tempXml +'<compactLayouts>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</compactLayouts>';
+                    }
+                    else if(metaType == 'WebLink')
+                    {
+                        tempXml = tempXml +'<webLinks>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</webLinks>';
+                    }
+                    else if(metaType == 'RecordType')
+                    {
+                        tempXml = tempXml +'<recordTypes>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</recordTypes>';
+                    }
+                    else if(metaType == 'FieldSet')
+                    {
+                        tempXml = tempXml +'<fieldSets>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fieldSets>';
+                    }
+                    else if(metaType == 'ValidationRule')
+                    {
+                        tempXml = tempXml +'<validationRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</validationRules>';
+                    }
+                    else if(metaType == 'AssignmentRule')
+                    {
+                        tempXml = tempXml +'<assignmentRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</assignmentRule>';
+                    }
+                    else if(metaType == 'AutoResponseRule')
+                    {
+                        tempXml = tempXml +'<autoResponseRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</autoResponseRule>';
+                    }
+                    else if(metaType == 'WorkflowAlert')
+                    {
+                        tempXml = tempXml +'<alerts>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</alerts>';
+                    }
+                    else if(metaType == 'WorkflowFieldUpdate')
+                    {
+                        tempXml = tempXml +'<fieldUpdates>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fieldUpdates>';
+                    }
+                    else if(metaType == 'WorkflowKnowledgePublish')
+                    {
+                        tempXml = tempXml +'<knowledgePublishes>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</knowledgePublishes>';
+                    }
+                    else if(metaType == 'WorkflowOutboundMessage')
+                    {
+                        tempXml = tempXml +'<outboundMessages>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</outboundMessages>';
+                    }
+                    else if(metaType == 'WorkflowTask')
+                    {
+                        tempXml = tempXml +'<tasks>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</tasks>';
+                    }
+                    else if(metaType == 'WorkflowRule')
+                    {
+                        tempXml = tempXml +'<rules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</rules>';
+                    }
+                    else if(metaType == 'SharingCriteriaRule')
+                    {
+                        tempXml = tempXml +'<sharingCriteriaRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingCriteriaRules>';
+                    }
+                    else if(metaType == 'SharingOwnerRule')
+                    {
+                        tempXml = tempXml +'<sharingOwnerRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingOwnerRules>';
+                    }
+                    else if(metaType == 'EscalationRule')
+                    {
+                        tempXml = tempXml +'<escalationRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</escalationRule>';
+                    }
+                    else if(metaType == 'MatchingRule')
+                    {
+                        tempXml = tempXml +'<matchingRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</matchingRules>';
+                    }
+                    else if(metaType == 'ManagedTopic')
+                    {
+                        tempXml = tempXml +'<managedTopic>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</managedTopic>';
+                    }
+                    else if(metaType == 'BusinessProcess')
+                    {
+                        tempXml = tempXml +'<businessProcesses>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</businessProcesses>';
+                    }
+                    else if(metaType == 'SharingReason')
+                    {
+                        tempXml = tempXml +'<sharingReasons>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingReasons>';
+                    }
+                    
+                    
+                    //footer
+                    if(metaType == 'CustomLabel')
+                    {
+                        tempXml = tempXml +'</CustomLabels>';
+                    }
+                    else if(metaType == 'AssignmentRule' )
+                    {
+                        tempXml = tempXml +'</AssignmentRules>';
+                    }
+                    else if(metaType == 'AutoResponseRule')
+                    {
+                        tempXml = tempXml +'</AutoResponseRules>';
+                    }
+                    else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule'  || metaType == 'WorkflowKnowledgePublish')
+                    {
+                        tempXml = tempXml +'</Workflow>';
+                    }
+                    else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+                    {
+                        tempXml = tempXml +'</SharingRules>';
+                    }
+                    else if(metaType == 'EscalationRule')
+                    {
+                        tempXml = tempXml +'</EscalationRules>';
+                    }
+                    else if(metaType == 'MatchingRule')
+                    {
+                        tempXml = tempXml +'</MatchingRules>';
+                    }
+                    else if(metaType == 'ManagedTopic')
+                    {
+                        tempXml = tempXml +'</ManagedTopics>';
+                    }
+                    else
+                    {
+                        tempXml = tempXml +'</CustomObject>';
+                    }
+                    //tempXml = unescape(encodeURIComponent(tempXml));
+                    snapshotCrcMap[parentId+'#'+metaType+"#"+fullName+""+name] =  getCrcWithData(tempXml,{isInnerType:true});
+                }
+            }
+        }
+        
+        function hidePagination()
+        {
+            angular.element(document.getElementById('angularControllerId')).scope().clearPagination();
+        }
+        
+        function setMessageOnPage(msg)
+        {
+            var parentVal = $("[id$='msg']");
+            if(parentVal != undefined)
+            {
+                parentVal.html('');
+                if(msg != '')
+                {
+                    var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                        '<div class="message errorM3" role="alert">'+
+                                            '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                '<tbody>'+
+                                                    '<tr valign="top">'+
+                                                        '<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+                                                        '<td class="messageCell">'+
+                                                            '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                                '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+                                                                    '<h4>Error:</h4>'+
+                                                                '</span>'+msg+'<br>'+
+                                                            '</div>'+
+                                                        '</td>'+
+                                                    '</tr>'+
+                                                    '<tr>'+
+                                                        '<td></td>'+
+                                                        '<td></td>'+
+                                                    '</tr>'+
+                                                '</tbody>'+
+                                            '</table>'+
+                                        '</div>'+
+                                    '</span>';
+                    parentVal.append(childVal); 
+                }           
+            }
+        }
+        
+        function setInfoMessageOnPage(msg)
+        {
+            var parentVal = $("[id$='msg']");
+            if(parentVal != undefined)
+            {
+                parentVal.html('');
+                var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                    '<div class="message infoM3" role="alert">'+
+                                        '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                            '<tbody>'+
+                                                '<tr valign="top">'+
+                                                    '<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+                                                    '<td class="messageCell">'+
+                                                        '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                            '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+                                                                '<h4></h4>'+
+                                                            '</span>'+msg+'<br>'+
+                                                        '</div>'+
+                                                    '</td>'+
+                                                '</tr>'+
+                                                '<tr>'+
+                                                    '<td></td>'+
+                                                    '<td></td>'+
+                                                '</tr>'+
+                                            '</tbody>'+
+                                        '</table>'+
+                                    '</div>'+
+                                '</span>';
+                parentVal.append(childVal);             
+            }
+            enableFlosumUI();
+            hide();
+        }
+        
+        function showProgress(pVal)
+        {
+            var pb = $("#progressbar");
+            if(pb != undefined)
+                pb.progressbar({value: pVal});
+        }
+        
+        function showMessage(message)
+        {
+            setMessageOnPage(message);
+            enableFlosumUI();
+            hide();
+            var pb = $("#progressbar");
+            if(pb != undefined)
+                pb.progressbar( "destroy" );
+        }
+		
+		const XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>';
+		function getCrcWithData(zipData,flags)
+		{
+			if (zipData != undefined && flags != undefined && flags.isInnerType == true){
+				zipData = vkbeautify.xml(zipData);
+			}
+			return normalZip.crc32(zipData,32);
+		}
+		
+		// analyse and return bundle's crc32 sum (see the specs for detail)
+		function composeBundleCrc(bundleComponentStack) {
+			var mapComp = {'.cmp':'','.cmp-meta.xml':'' ,'Controller.js':'','Helper.js':'','.css':'','.auradoc':'','Renderer.js':'','.design':'','.svg':''};
+            var crcCode = '';
+                                                                
+			for (var i = 0; i < bundleComponentStack.length; i++){
+                 var zipFileName = bundleComponentStack[i].fileName;
+                 if(zipFileName != undefined)
+                 {
+          			var index = getBundleExt(zipFileName);
+                    if (index > -1){
+        	          	var ext = zipFileName.substr(index)
+    	                mapComp[ext] = bundleComponentStack[i].crc32;
+                    }
+                 }
+             }
+             crcCode = mapComp['.cmp']+','+mapComp['.cmp-meta.xml']+ ','+mapComp['Controller.js']+','+mapComp['Helper.js']+
+                                      ','+mapComp['.css']+','+mapComp['.auradoc']+','+mapComp['Renderer.js']+','+mapComp['.design']+','+mapComp['.svg'];
+             return crcCode;
+		}
+		
+		function getBundleExt(str) {
+        	var index = str.lastIndexOf('.js');
+        	if (index > -1){// verify 3 exts
+        		index = str.lastIndexOf('Controller.js');
+        		if (index == -1){
+	        		index = str.lastIndexOf('Helper.js');
+			   		if (index == -1){
+	        			index = str.lastIndexOf('Renderer.js');
+       				}
+        		}
+        		return index;
+        	}
+        	index = str.lastIndexOf('.cmp-meta.xml');
+        	if (index == -1){
+        		return str.lastIndexOf('.');
+        	}
+        	return index;
+        }
+        
+        function disableFlosumUI()
+        {
+            var toDisableItems = document.getElementsByClassName('disableitem');
+            for (var i = 0; i < toDisableItems.length; i++) 
+            {
+                if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit' || 
+                	toDisableItems[i].type == 'select-one' || toDisableItems[i].type == 'text' || 
+                	toDisableItems[i].type == 'checkbox' || toDisableItems[i].tagName == 'IMG')
+                {
+                    toDisableItems[i].disabled = true;
+                    if(toDisableItems[i].tagName == 'IMG')
+                    {
+                    	toDisableItems[i].style.pointerEvents = 'none';
+                    }
+                    else if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit')
+                        toDisableItems[i].className += ' btnDisabled';
+                }
+            }
+        }
+        
+        function enableFlosumUI()
+        {
+            var toDisableItems = document.getElementsByClassName('disableitem');
+            for (var i = 0; i < toDisableItems.length; i++) 
+            {
+                if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit' || 
+                	toDisableItems[i].type == 'select-one' || toDisableItems[i].type == 'text' || 
+                	toDisableItems[i].type == 'checkbox' || toDisableItems[i].tagName == 'IMG')
+                {
+                    toDisableItems[i].disabled = false;
+                    if(toDisableItems[i].tagName == 'IMG')
+                    {
+                    	toDisableItems[i].style.pointerEvents = '';
+                    }
+                    else if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit')
+                        toDisableItems[i].className = toDisableItems[i].className.replace(' btnDisabled','');
+                }
+            }
+        }
+        
+        function isMapEmpty(localMap)
+        {
+            for(var key in localMap)
+            {
+                return false;
+            }
+            return true;
+        }
+    </script>
+</apex:page>

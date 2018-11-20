@@ -1,0 +1,899 @@
+<apex:page standardController="Flosum__Snapshot__c" extensions="Flosum.ObjectReportController" sidebar="false" showHeader="false">
+	<c:TrackPanel />
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jquery)}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/ga.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/zip.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__Utility, 'JS/angular.min.js')}"/>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.3.2/jspdf.min.js"></script>
+	<c:Wait />
+	<style>
+		table.objTable {
+		    font-family: arial, sans-serif;
+		    border-collapse: collapse;
+		    margin: 12px;
+		}
+		
+		.objTable td, th {
+		    border: 1px solid #dddddd;
+		    text-align: left;
+		    padding: 8px;
+		}
+		
+		.objTable tr:nth-child(even) {
+		    background-color: #dddddd;
+		}
+		
+		table.picklistTable {
+			background-color: white;
+		}
+		
+		.picklistTable tr:nth-child(even) {
+		    background-color: white;
+		}
+		
+		h5 {
+			font-size: 16px;
+			margin-left: 13px;
+		}
+	</style>
+	<apex:pagemessages id="msg"/>
+	<apex:form >
+		<button type="button" onClick="downloadReport();" style="margin-left: 94%; margin-top: 10px;">Download Report</button>
+		<div ng-app="objectReport">
+            <div ng-controller ="objectReportController" id="angularControllerId">
+                <div class="ng-cloak">
+                    <fieldset ng-disabled="disableUi">
+                    </fieldset>
+                </div>
+            </div>
+        </div>
+       	<div id="reportParentDiv">
+       		
+       	</div>
+	</apex:form>
+	<script>
+		zip.workerScriptsPath = "{!URLFOR($Resource.zipp,'res/js/workers')}/";
+        Visualforce.remoting.timeout = 120000;
+        var tempObjectLi = [];
+		var tempObjectMap = {};
+        
+		var myApp = angular.module("objectReport", []);
+        myApp.controller("objectReportController", ['$scope',function($scope) {
+            /****************************Default Properties*******************************/
+            $scope.objectReportLi = [];
+            $scope.objectDetailMap = {};
+            $scope.snapId = '{!snapId}';
+			$scope.downloadItems = [];
+    		$scope.attachmentMap = {};
+    		$scope.attIdsCount = 0;
+    		$scope.attList = [];
+    		$scope.attIndex = 0;
+            
+            $scope.createobjectReport = function() {
+            	$scope.downloadItems = [];
+				$scope.attachmentMap = {};
+				$scope.attList = [];
+				$scope.attIndex = 0;
+				if($scope.snapId != undefined)
+				{
+			    	Visualforce.remoting.Manager.invokeAction(
+			            '{!$RemoteAction.ObjectReportController.getMetaItemsData}',
+			            $scope.snapId,
+			            function(r,e){
+                            $scope.$apply(function() {
+                            	if(e.status && r) 
+							    {
+							    	$scope.downloadItems = r.MetaItemlist;
+							    	if(r.MetaItemlist.length > 0)
+							    	{
+							    		$.each( r.MetaItemlist, function( key, metaItems ) {
+											$.each( metaItems.items, function( index, item ) {
+												$scope.attachmentMap[item.attachmentId] = item.attachmentId;
+												var detail = {};
+												detail.item = item;
+												detail.data = {};
+												$scope.objectDetailMap[item.fileName] = detail;
+											});
+										});
+										$scope.getAttachmentsDetail();
+							    	}
+							    	else
+							    	{
+							    		$scope.showMessage('No object found in snapshot to create a report.','ERROR');
+							    	}
+							    }
+							    else
+							    {
+							    	$scope.showMessage(e.message,'ERROR');
+							    }
+                            });
+                    });
+		        }
+            	
+            };
+            
+            $scope.getAttachmentsDetail = function() {
+				$scope.attIdsCount = $scope.mapCounter($scope.attachmentMap);
+				
+				Visualforce.remoting.Manager.invokeAction(
+		            '{!$RemoteAction.ObjectReportController.getAttachmentsDetail}',
+		            JSON.stringify($scope.attachmentMap),
+		            function(r,e){
+                            $scope.$apply(function() {
+                            	if(e.status && r) 
+							    {
+							    	if($scope.attIdsCount != r.length)
+							    	{
+							    		$scope.showMessage('The definition of some of these components may have been deleted.','ERROR');
+							    		return;
+							    	}
+							    	if(r.length > 0)
+									{
+										$scope.attList = [];
+										var bodySize = 0;
+										var temp = [];
+										for(var i in r)
+										{
+											if(i< r.length)
+											{
+												var att = r[i];
+												if((bodySize +att.BodyLength) > 3000000 && temp.length > 0) 
+												{
+													$scope.attList.push(temp);
+													bodySize = 0;
+													temp = [];
+												}
+												temp.push(att.Id);
+												bodySize = bodySize+att.BodyLength;
+											}
+										}
+										if(temp.length > 0)
+										{
+											$scope.attList.push(temp);
+										}
+									}
+									if($scope.attList.length > 0)
+									{
+										//attachment found.
+										$scope.attIndex = 0;
+										$scope.getAttachments();
+									}
+									else
+									{
+										console.log('No attachment found.');
+									}
+							    }
+							    else
+							    {
+							    	$scope.showMessage(e.message,'ERROR');
+							    }
+                            });
+            	});   
+			};
+			
+			$scope.showReport = function(reportObjLi) {
+				$scope.$apply(function() {
+					$scope.objectReportLi = reportObjLi;
+					$scope.printTable();					
+				});
+			};
+			
+			$scope.getAttachments = function() {
+				if($scope.attIndex < $scope.attList.length)
+				{
+					var attLi = $scope.attList[$scope.attIndex];
+					Visualforce.remoting.Manager.invokeAction(
+			            '{!$RemoteAction.ObjectReportController.getAttachments}',
+			            JSON.stringify(attLi),
+			            function(r,e){
+                            $scope.$apply(function() {
+                            	if(e.status && r) 
+							    {
+							    	if(r.length > 0)
+							    	{
+							    		var attReadIndex = 0;
+							    		var readFullAtt = function(){
+							    			if(attReadIndex < r.length)
+							    			{
+							    				var att = r[attReadIndex];
+												var parentId = att.parentId;
+									    		var metaType = att.compType;
+									    		var base64str = att.base64;
+									    		// use a Data64URIReader to read the zip from a base64 string
+												zip.createReader(new zip.Data64URIReader(base64str), function(reader) {
+													var EntryIndex = 0;
+													// get all entries from the zip
+													reader.getEntries(function(entries) {
+														if(entries.length)
+														{
+															var readSingleFile = function(){
+															    if (EntryIndex < entries.length) 
+															    {
+															    	var singleEntry = entries[EntryIndex];
+															    	var fileName = singleEntry.filename;
+															    	if(metaType != undefined)
+																	{
+																		entries[EntryIndex].getData(new zip.TextWriter(), function(text) {
+																			if(fileName != undefined && fileName != 'package.xml')
+																	        {
+																	        	var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+																	            var objJSON = x2js.xml_str2json(text);
+																	            if($scope.objectDetailMap[fileName] != undefined)
+																	            {
+																	            	var detail = $scope.objectDetailMap[fileName];
+																					detail.data = objJSON;
+																					tempObjectLi.push(detail);
+																	            }
+																			}
+																			EntryIndex++;
+																			readSingleFile();
+																		});
+																	}
+														    	}
+														    	else
+														    	{
+														    		// close the zip reader
+															        reader.close(function() {
+															          // onclose callback
+															          	attReadIndex++;
+															        	readFullAtt();
+															        });
+														    	}
+													    	}
+													    	readSingleFile();
+														}
+														else
+														{
+															console.log('!entries.length');
+														}
+													});
+												}, function(error) {
+												  	// onerror callback
+												  	console.log('Error in reading file from attachments.');
+												  	console.log(error);
+												  	console.log(JSON.stringify(error));
+													if(error.message != undefined)
+													{
+														showMessage(error.message);
+													}
+													else
+													{
+														showMessage('Unknown error.');
+													}
+												});
+							    			}
+							    			else
+							    			{
+							    				$scope.attIndex++;
+												$scope.getAttachments();
+							    			}
+							    		}
+							    		readFullAtt();
+							    	}
+							    	else
+									{
+										$scope.attIndex++;
+										$scope.getAttachments();
+									}
+							    }
+							    else
+							    {
+							    	$scope.showMessage(e.message,'ERROR');
+							    }
+                            });
+                    });
+				}
+				else
+				{
+					console.log('all attachment collected succesfully.');
+					$scope.showReport(tempObjectLi);
+				}
+			};
+			
+			$scope.mapCounter = function(localMap) {
+				var temp = 0;
+				for(var key in localMap)
+				{
+					temp++;
+				}
+				return temp;
+			};
+			
+			$scope.showMessage = function(Message_Str,Message_Type) {
+                var parentVal = $("[id$='msg']");
+                if(parentVal != undefined)
+                {
+                    parentVal.html('');
+                    if(Message_Str != '')
+                    {
+                        if(Message_Type == 'ERROR')
+                        {
+                            var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                            '<div class="message errorM3" role="alert">'+
+                                                '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                    '<tbody>'+
+                                                        '<tr valign="top">'+
+                                                            '<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+                                                            '<td class="messageCell">'+
+                                                                '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                                    '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+                                                                        '<h4>Error:</h4>'+
+                                                                    '</span>'+Message_Str+'<br>'+
+                                                                '</div>'+
+                                                            '</td>'+
+                                                        '</tr>'+
+                                                        '<tr>'+
+                                                            '<td></td>'+
+                                                            '<td></td>'+
+                                                        '</tr>'+
+                                                    '</tbody>'+
+                                                '</table>'+
+                                            '</div>'+
+                                        '</span>';
+                            parentVal.append(childVal);
+                            $scope.disableUi = false;
+                        }
+                        else if(Message_Type == 'INFO')
+                        {
+                            var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                                '<div class="message infoM3" role="alert">'+
+                                                    '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                        '<tbody>'+
+                                                            '<tr valign="top">'+
+                                                                '<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+                                                                '<td class="messageCell">'+
+                                                                    '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                                        '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+                                                                            '<h4></h4>'+
+                                                                        '</span>'+Message_Str+'<br>'+
+                                                                    '</div>'+
+                                                                '</td>'+
+                                                            '</tr>'+
+                                                            '<tr>'+
+                                                                '<td></td>'+
+                                                                '<td></td>'+
+                                                            '</tr>'+
+                                                        '</tbody>'+
+                                                    '</table>'+
+                                                '</div>'+
+                                            '</span>';
+                            parentVal.append(childVal);
+                        }
+                    }
+                }
+            };
+			
+			$scope.printTable = function() {
+				//reportParentDiv
+				angular.forEach($scope.objectReportLi, function (objectWrap, index) {
+	            	
+	            	var objDetail = objectWrap.data.CustomObject;
+				    
+				    var objParentTable = $('<br/><h4>').text('Object API Name : ' + objectWrap.item.fullName).css({'margin-left':'13px','color':'#015ba7'});
+				    var row = $("<br/><br/>");
+				    objParentTable.append(row);
+					$('#reportParentDiv').append(objParentTable);
+					
+					var simpleMap = {};//Done
+					var nameField = {};
+					var actionOverrides = [];//Done
+					var businessProcesses = [];
+					var compactLayouts = [];
+					var fields = [];
+					var fieldSets = [];
+					var listViews = [];
+					//var namedFilter = [];
+					var recordTypes = [];
+					//var searchLayouts = [];
+					var validationRules = [];
+					var webLinks = [];
+	            	if(objDetail.nameField != undefined) {
+	            		fields.push(objDetail.nameField);
+	            	}
+	            	angular.forEach(objDetail, function (objectAttributeVal, objectAttributeKey) {
+	            		
+	            		if(angular.isArray(objectAttributeVal)) {
+	            			
+	            			angular.forEach(objectAttributeVal, function (nodeVal, nodeIndex) {
+		            			if(objectAttributeKey == 'actionOverrides') {
+		            				actionOverrides.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'businessProcesses') {
+		            				businessProcesses.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'compactLayouts') {
+		            				compactLayouts.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'fields') {
+		            				fields.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'fieldSets') {
+		            				fieldSets.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'listViews') {
+		            				listViews.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'recordTypes') {
+		            				recordTypes.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'validationRules') {
+		            				validationRules.push(nodeVal);
+		            			}
+		            			else if(objectAttributeKey == 'webLinks') {
+		            				webLinks.push(nodeVal);
+		            			}
+	            			});
+	            		}
+	            		else if(angular.isObject(objectAttributeVal)) {
+	            			if(objectAttributeKey == 'actionOverrides') {
+	            				actionOverrides.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'businessProcesses') {
+	            				businessProcesses.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'compactLayouts') {
+	            				compactLayouts.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'fields') {
+	            				fields.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'fieldSets') {
+	            				fieldSets.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'listViews') {
+	            				listViews.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'recordTypes') {
+	            				recordTypes.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'validationRules') {
+	            				validationRules.push(objectAttributeVal);
+	            			}
+	            			else if(objectAttributeKey == 'webLinks') {
+	            				webLinks.push(objectAttributeVal);
+	            			}
+	            		}
+	            		else if(objectAttributeKey != '_xmlns') {
+	            			simpleMap[objectAttributeKey] = objectAttributeVal;
+	            		}
+					});
+						
+					//Object Properties
+					var properties = $('<h5>').text('Object Properties');
+					var objAttTable = $('<table>').addClass('objTable');
+					angular.forEach(simpleMap, function (objectAttributeVal, objectAttributeKey) {
+						
+					    var rowAtt = $("<tr/>");
+				        rowAtt.append($("<td/>").text(objectAttributeKey));
+				        rowAtt.append($("<td/>").text(objectAttributeVal));
+					    objAttTable.append(rowAtt);
+					});
+					$('#reportParentDiv').append(properties);
+					$('#reportParentDiv').append(objAttTable);
+					
+					//actionOverrides
+					if(actionOverrides.length > 0) {
+						var properties2 = $('<h5>').text('Action Overrides');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Action Name'));
+				        rowHeader.append($("<th/>").text('Type'));
+					    objAttTable2.append(rowHeader);
+						angular.forEach(actionOverrides, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.actionName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.type));
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+						
+					//businessProcesses
+					if(businessProcesses.length > 0) {
+						var properties2 = $('<h5>').text('Business Processes');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+				        rowHeader.append($("<th/>").text('IsActive'));
+				        rowHeader.append($("<th/>").text('Name Space Prefix'));
+				        rowHeader.append($("<th/>").text('Values'));
+					    objAttTable2.append(rowHeader);
+						angular.forEach(businessProcesses, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.isActive));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.namespacePrefix));
+					        
+					        var text = '';
+					        var valuesLi = [];
+					        if(angular.isArray(objectAttributeVal.values))
+					        {
+					        	angular.forEach(objectAttributeVal.values, function (fieldName, fieldIndex) {
+						        	valuesLi.push(fieldName);
+						        });
+					        }
+					        else if(angular.isObject(objectAttributeVal.values))
+					        {
+					        	valuesLi.push(objectAttributeVal.values);
+					        }
+					        
+					        angular.forEach(valuesLi, function (fieldName, fieldIndex) {
+					        	text+= fieldName.fullName+'<br/>';
+					        });
+					        rowAtt.append($("<td/>").html(text));
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//compactLayouts
+					if(compactLayouts.length > 0) {
+						var properties2 = $('<h5>').text('Compact Layouts');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+						rowHeader.append($("<th/>").text('Label'));
+				        rowHeader.append($("<th/>").text('Fields'));
+				        
+					    objAttTable2.append(rowHeader);
+						angular.forEach(compactLayouts, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.label));
+					        
+					        var text = '';
+					        var fieldsLi = [];
+					        if(angular.isArray(objectAttributeVal.fields))
+					        {
+					        	angular.forEach(objectAttributeVal.fields, function (fieldName, fieldIndex) {
+						        	fieldsLi.push(fieldName);
+						        });
+					        }
+					        else if(angular.isObject(objectAttributeVal.fields))
+					        {
+					        	fieldsLi.push(objectAttributeVal.fields);
+					        }
+					        
+					        angular.forEach(fieldsLi, function (fieldName, fieldIndex) {
+					        	text+= fieldName+'<br/>';
+					        });
+					        rowAtt.append($("<td/>").html(text));
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//fields
+					if(fields.length > 0) {
+						var properties2 = $('<h5>').text('Fields');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+				        rowHeader.append($("<th/>").text('Label'));
+				        rowHeader.append($("<th/>").text('Type'));
+				        rowHeader.append($("<th/>").text('Picklist Values'));
+				        rowHeader.append($("<th/>").text('Required'));
+				        rowHeader.append($("<th/>").text('Reference To'));
+				        
+					    objAttTable2.append(rowHeader);
+						angular.forEach(fields, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.label));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.type));
+					        
+					        var text = '';
+				        	angular.forEach(objectAttributeVal.valueSet, function (fields, fieldIndex) {
+					        
+					        	var valueLi = [];
+						        if(angular.isArray(fields.value))
+						        {
+						        	angular.forEach(fields.value, function (fieldName, fieldIndex) {
+							        	valueLi.push(fieldName);
+							        });
+						        }
+						        else if(angular.isObject(fields.value))
+						        {
+						        	valueLi.push(fields.value);
+						        }
+						        
+					        	angular.forEach(valueLi, function (fieldVal, valSetIndex) {
+						        	text+= fieldVal.fullName+'<br/>';
+						        });
+					        });
+					        if(objectAttributeVal.valueSet != undefined && objectAttributeVal.valueSet.valueSetName != undefined)
+					        {
+					        	text+= objectAttributeVal.valueSet.valueSetName+'<br/>';
+				        	}
+					        
+					        rowAtt.append($("<td/>").html(text));				        
+					        rowAtt.append($("<td/>").text(objectAttributeVal.required));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.referenceTo));
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//fieldSets
+					if(fieldSets.length > 0) {
+						var properties2 = $('<h5>').text('Field Sets');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+						rowHeader.append($("<th/>").text('Label'));
+						rowHeader.append($("<th/>").text('Displayed Fields'));
+				        
+					    objAttTable2.append(rowHeader);
+						angular.forEach(fieldSets, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.label));
+					       
+					        var text = '';
+					        var displayedFieldLi = [];
+					        if(angular.isArray(objectAttributeVal.displayedFields))
+					        {
+					        	angular.forEach(objectAttributeVal.displayedFields, function (fieldName, fieldIndex) {
+						        	displayedFieldLi.push(fieldName);
+						        });
+					        }
+					        else if(angular.isObject(objectAttributeVal.displayedFields))
+					        {
+					        	displayedFieldLi.push(objectAttributeVal.displayedFields);
+					        }
+					        else
+					        {
+					        	if(objectAttributeVal.displayedFields != undefined)
+					        		displayedFieldLi.push(objectAttributeVal.displayedFields);
+					        }
+					        
+					        angular.forEach(displayedFieldLi, function (fieldName, fieldIndex) {
+					        	text+= fieldName.field+'<br/>';
+					        });
+					        rowAtt.append($("<td/>").html(text));
+					        
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//listViews
+					if(listViews.length > 0) {
+						var properties2 = $('<h5>').text('List Views');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+						rowHeader.append($("<th/>").text('Label'));
+						rowHeader.append($("<th/>").text('FilterScope'));
+						rowHeader.append($("<th/>").text('Columns'));
+				        
+					    objAttTable2.append(rowHeader);
+						angular.forEach(listViews, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.label));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.filterScope));
+					        
+					        var text = '';
+					        var listViewColumnLi = [];
+					        if(angular.isArray(objectAttributeVal.columns))
+					        {
+					        	angular.forEach(objectAttributeVal.columns, function (fieldName, fieldIndex) {
+						        	listViewColumnLi.push(fieldName);
+						        });
+					        }
+					        else if(angular.isObject(objectAttributeVal.columns))
+					        {
+					        	listViewColumnLi.push(objectAttributeVal.columns);
+					        }
+					        else
+					        {
+					        	if(objectAttributeVal.columns != undefined)
+					        		listViewColumnLi.push(objectAttributeVal.columns);
+					        }
+					        
+					        angular.forEach(listViewColumnLi, function (fieldName, fieldIndex) {
+					        	text+= fieldName+'<br/>';
+					        });
+					        rowAtt.append($("<td/>").html(text));
+					        
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//recordTypes
+					if(recordTypes.length > 0) {
+						var properties2 = $('<h5>').text('Record Types');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+						rowHeader.append($("<th/>").text('Label'));
+						rowHeader.append($("<th/>").text('Active'));
+						rowHeader.append($("<th/>").text('Picklist'));
+				        
+					    objAttTable2.append(rowHeader);
+					    
+						angular.forEach(recordTypes, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.label));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.active));
+					        
+					        if(angular.isArray(objectAttributeVal.picklistValues))
+					        {				
+		        				var picklistTable = $('<table>').addClass('picklistTable');
+		        				var pickRowHeader = $("<tr/>");
+								pickRowHeader.append($("<th/>").text('Picklist Name'));
+								pickRowHeader.append($("<th/>").text('Picklist Values'));
+						        
+							    picklistTable.append(pickRowHeader);
+		        				
+						        angular.forEach(objectAttributeVal.picklistValues, function (fields, fieldIndex) {
+						        	var picklistRowAtt = $("<tr/>");
+						        	picklistRowAtt.append($("<td/>").text(fields.picklist));
+						        	
+							        var text = '';
+							        var fieldsValuesLi = [];
+							        if(angular.isArray(fields.values))
+							        {
+							        	angular.forEach(fields.values, function (fieldVal, fieldIndex) {
+								        	fieldsValuesLi.push(fieldVal);
+								        });
+							        }
+							        else if(angular.isObject(fields.values))
+							        {
+							        	fieldsValuesLi.push(fields.values);
+							        }
+							        else
+							        {
+							        	if(fields.values != undefined)
+							        		fieldsValuesLi.push(fields.values);
+							        }
+							        
+							        angular.forEach(fieldsValuesLi, function (fieldVal, fieldIndex) {
+							        	text += fieldVal.fullName+'<br/>';
+							        });
+							        picklistRowAtt.append($("<td/>").html(text));
+							        picklistTable.append(picklistRowAtt);
+						        });
+					        	rowAtt.append($("<td/>").html(picklistTable));
+				        	}
+				        	else if(angular.isObject(objectAttributeVal.picklistValues))
+				        	{
+				        		var picklistTable = $('<table>').addClass('picklistTable');
+		        				var pickRowHeader = $("<tr/>");
+								pickRowHeader.append($("<th/>").text('Picklist Name'));
+								pickRowHeader.append($("<th/>").text('Picklist Values'));
+						        
+							    picklistTable.append(pickRowHeader);
+		        				
+					        	var picklistRowAtt = $("<tr/>");
+					        	picklistRowAtt.append($("<td/>").text(objectAttributeVal.picklistValues.picklist));
+					        	
+						        var text = '';
+						        var fieldsValuesLi = [];
+						        if(angular.isArray(objectAttributeVal.picklistValues.values))
+						        {
+						        	angular.forEach(objectAttributeVal.picklistValues.values, function (fieldVal, valSetIndex) {
+							        	fieldsValuesLi.push(fieldVal);
+							        });
+						        }
+						        else if(angular.isObject(objectAttributeVal.picklistValues.values))
+						        {
+						        	fieldsValuesLi.push(objectAttributeVal.picklistValues.values);
+						        }
+						        else
+						        {
+						        	if(objectAttributeVal.picklistValues.values != undefined)
+						        		fieldsValuesLi.push(objectAttributeVal.picklistValues.values);
+						        }
+						        
+						        angular.forEach(fieldsValuesLi, function (fieldVal, fieldIndex) {
+						        	text += fieldVal.fullName+'<br/>';
+						        });
+						        
+						        picklistRowAtt.append($("<td/>").html(text));
+						        picklistTable.append(picklistRowAtt);
+						        
+					        	rowAtt.append($("<td/>").html(picklistTable));
+				        	}
+				        	else
+					        {
+				        		rowAtt.append($("<td/>").html(objectAttributeVal.picklistValues));
+					        }
+					        
+						    objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//validationRules
+					if(validationRules.length > 0) {
+						var properties2 = $('<h5>').text('Validation Rules');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+						rowHeader.append($("<th/>").text('Active'));
+						rowHeader.append($("<th/>").text('Description'));
+						rowHeader.append($("<th/>").text('Error Message'));
+				        
+					    objAttTable2.append(rowHeader);
+						angular.forEach(validationRules, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.active));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.description));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.errorMessage));
+					        						        
+					        objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					//webLinks
+					if(webLinks.length > 0) {
+						var properties2 = $('<h5>').text('WebLinks');
+						var objAttTable2 = $('<table>').addClass('objTable');
+						
+						var rowHeader = $("<tr/>");
+						rowHeader.append($("<th/>").text('Full Name'));
+						rowHeader.append($("<th/>").text('Master Label'));
+						rowHeader.append($("<th/>").text('Display Type'));
+						rowHeader.append($("<th/>").text('Link Type'));
+						rowHeader.append($("<th/>").text('Page'));
+				        
+					    objAttTable2.append(rowHeader);
+						angular.forEach(webLinks, function (objectAttributeVal, objectAttributeKey) {
+							
+						    var rowAtt = $("<tr/>");
+					        rowAtt.append($("<td/>").text(objectAttributeVal.fullName));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.masterLabel));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.displayType));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.linkType));
+					        rowAtt.append($("<td/>").text(objectAttributeVal.page));
+					        						        
+					        objAttTable2.append(rowAtt);
+						});
+						$('#reportParentDiv').append(properties2);
+						$('#reportParentDiv').append(objAttTable2);
+					}
+					
+					$('#reportParentDiv').append($('<hr/>'));
+		        });
+			};
+			
+			$scope.createobjectReport();
+		}]);
+		
+		function downloadReport()
+		{
+			window.print();
+		}
+	</script>
+</apex:page>

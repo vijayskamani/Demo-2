@@ -1,0 +1,133 @@
+<apex:page controller="Flosum.MassDeleteSnapshotController" tabStyle="Settings__tab" docType="html-5.0" sidebar="false">
+	<c:TrackPanel />
+	<style>
+		div .pagination {
+			text-align: center;
+		}
+		span.paginationEle {
+		margin-left: 4px;
+		}
+		.pagination input {
+		margin-left: 4px;
+		}
+	</style>
+	<c:Wait />
+	<apex:pageMessage severity="info" escape="false" summary="Snapshots consume the most storage space in the Flosum application. On the Snapshot details page, you can view the list of components retrieved. These records are stored in Metadata Items object. The records in this objects consume the bulk of storage used by Flosum.<br/>
+	This utility will find the Metadata items records that are not referenced elsewhere in the application. These records can be easily removed from older snapshots to reclaim storage space.<br/>
+	In the field below, please enter the criteria for selecting the snapshots.<br/>
+	Please note that the records will be removed from the Metadata Items object for the selected snapshots."/>
+	<apex:form id="massDeleteForm">
+		<apex:pageMessages id="msg" />
+		<apex:pageBlock id="snapBlock">
+			<apex:pageBlockButtons >
+				<apex:commandButton value="List" onClick="show();" action="{!defaultPagination}" reRender="msg,snapBlock" onComplete="hide();"/>
+				<apex:commandButton value="Delete" action="{!executeDelteBatch}" onClick="show();" reRender="msg,snapBlock" rendered="{!if(snapList.size > 0,true,false)}" onComplete="hide();"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlockSection columns="1">
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="Start Date"/>
+					<apex:inputField value="{!startDate.Flosum__Schedule_Time__c}"/>
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="End Date"/>
+					<apex:inputField value="{!endDate.Flosum__Schedule_Time__c}"/>
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="Created By"/>
+					 <apex:selectList size="1" value="{!selectedCreatedBy}" >
+		                <apex:selectOptions value="{!createdByOptions}" />
+<!-- 		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listSourceComponents}" oncomplete="hide();" onsubmit="show();"/>  -->
+		            </apex:selectList>
+				</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="Organisation"/>
+					 <apex:selectList size="1" value="{!selectedOrg}" >
+		                <apex:selectOptions value="{!orgListOptions}"/>
+		            </apex:selectList>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection columns="1" rendered="{!if(snapList.size > 0,true,false)}">
+				<script>
+					$( document ).ready(function() {
+					    checkUnCheck();
+					});
+				</script>
+				<apex:pageBlockTable value="{!snapList}" var="item">
+            		<apex:column headervalue="Select">
+						<apex:facet name="header">
+							<input type="checkbox" onclick="checkItemAll(this);" class="psli" >&nbsp;</input>
+						</apex:facet>
+						<apex:inputCheckbox value="{!item.checked}" styleclass="sli" onClick="checkUnCheck();"/>
+					</apex:column>
+					<apex:column headervalue="Snapshot Name" value="{!item.snap.Name}" />
+					<apex:column headervalue="Org Name" value="{!item.snap.Organisation__r.Name}" /> 
+					<apex:column headervalue="Created By" value="{!item.snap.CreatedBy.Name}" />
+					<apex:column headervalue="Created Date" value="{!item.snap.CreatedDate}" />
+					<apex:column headervalue="No of Metadata Items" value="{!item.snap.Flosum__No_of_Metadata_Items__c}" />
+				</apex:pageBlockTable>
+				<apex:outputPanel rendered="{!if(snapList.size > 0,true,false)}" layout="block" styleClass="pagination">
+					<apex:commandbutton value="First" action="{!FirstPage}" reRender="snapBlock,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+					<apex:commandbutton value="Previous" action="{!previous}" reRender="snapBlock,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+					<apex:outputText value="{!paginationStr}" styleClass="paginationEle"/>
+					<apex:commandbutton value="Next" action="{!next}" reRender="snapBlock,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+					<apex:commandbutton value="Last" action="{!LastPage}" reRender="snapBlock,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+				</apex:outputPanel>
+            </apex:pageBlockSection>
+		</apex:pageBlock>
+	</apex:form>
+	<script>
+		function checkItemAll(ele) {
+			var checkboxes = document.getElementsByClassName('sli');
+		     if (ele.checked) {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = true;
+		             }
+		         }
+		     } else {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = false;
+		             }
+		         }
+		     }
+		}
+		
+		function checkUnCheck()
+		{	
+			var checkboxes = document.getElementsByClassName('sli');
+			if(checkboxes != undefined && checkboxes.length > 0)
+			{
+				var allUnChecked = true;
+				var allChecked = true;
+				for(var i = 0; i < checkboxes.length; i++) 
+		        {
+					if(checkboxes[i].type == 'checkbox' && checkboxes[i].checked) 
+		            {
+			        	allUnChecked = false;
+			        }
+		            else if(checkboxes[i].type == 'checkbox' && !checkboxes[i].checked)
+		            {
+		            	allChecked = false;
+		            }
+		        }
+		        if(allChecked)
+		        {
+		        	var parentCheckboxes = document.getElementsByClassName('psli');
+		        	if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+		        	{
+		        		parentCheckboxes[0].checked = true;
+		        	}
+		        }
+		        else if(allUnChecked || (!allUnChecked && !allChecked))
+		        {
+		        	var parentCheckboxes = document.getElementsByClassName('psli');
+		        	if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+		        	{
+		        		parentCheckboxes[0].checked = false;
+		        	}
+		        }
+		    }
+		}
+	</script>
+</apex:page>

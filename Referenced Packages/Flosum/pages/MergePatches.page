@@ -1,0 +1,245 @@
+<apex:page standardController="Flosum__Patch__c" recordSetVar="var" extensions="Flosum.MergePatchesExtension" action="{!mergeAction}" sidebar="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<style>
+		div .pagination {
+			text-align: center;
+		}
+		td .dataCell label {
+		font-weight: normal;
+		}
+		span.paginationEle {
+		margin-left: 4px;
+		}
+		.pagination input {
+		margin-left: 4px;
+		} 
+		body .searchRow {
+		  margin-left: 1%;
+		}
+		body .searchRowLast {
+		  margin-left: .5%;
+		}
+		span.duplicateHeaderCell{
+			margin-left: 2%;
+		}
+	</style>
+	<apex:form >
+		<apex:pagemessages id="msg"/>
+		<apex:actionfunction name="redirectToPatch" action="{!redirectToPatch}"/>
+		<apex:pageBlock title="Merge Patches">
+			<apex:pageBlockButtons >
+		        <apex:commandButton value="Add To Patch" action="{!addToPatch}" rendered="{!If(isValid,true,false)}" onComplete="listManifest('{!JSENCODE(manifestJSON)}','{!JSENCODE(patchId)}');" rerender="msg" onclick="show();"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlocksection rendered="{!If(isValid,true,false)}" columns="1">
+				<apex:pageblocksectionitem >
+					<apex:outputLabel value="Patch Name :" />	
+					<apex:inputText value="{!patchName}" />
+				</apex:pageblocksectionitem>
+				<apex:outputPanel rendered="{!If(conflictList.size > 0,true,false)}">
+					<p>{!$Label.flosum__merge_patches_description}</p>
+				</apex:outputPanel>
+			</apex:pageBlocksection>
+			<apex:pageBlocksection rendered="{!If(isValid,true,false)}" columns="1" id="conflictBlock">
+				<apex:actionFunction action="{!refreshStats}" onComplete="hide();" reRender="conflictBlock,msg" name="changeItem">
+					<apex:param assignTo="{!compId}" value="" name="componentHistoryId"/>
+				</apex:actionFunction>
+			    <apex:repeat value="{!conflictList}" var="item" rendered="{!If(conflictList.size > 0,true,false)}">
+			        <apex:outputPanel >
+			        	<apex:outputText value="{!item.componentName}"/>
+			        	<apex:outputText value="{!item.componentType}" styleClass="duplicateHeaderCell"/>
+			        </apex:outputPanel>
+			        <apex:pageblocksectionitem >
+				    	<apex:outputPanel >
+					    	<apex:pageblockTable value="{!item.duplicateMap}" var="ditem">
+					    		<apex:column headerValue="Source Patch">
+					    			<apex:outputPanel rendered="{!item.duplicateMap[ditem].checked}">
+					    				<input type="radio" name="{!item.componentType+'#'+item.componentName}" checked="checked" onChange="show();changeItem('{!item.duplicateMap[ditem].mani.Id}');">
+					    					{!item.duplicateMap[ditem].mani.Patch__r.Name}
+					    				</input>
+					    			</apex:outputPanel>
+					    			<apex:outputPanel rendered="{!!item.duplicateMap[ditem].checked}">
+					    				<input type="radio" name="{!item.componentType+'#'+item.componentName}" onChange="show();changeItem('{!item.duplicateMap[ditem].mani.Id}');">
+					    					{!item.duplicateMap[ditem].mani.Patch__r.Name}
+					    				</input>
+					    			</apex:outputPanel>
+					    		</apex:column>
+					    		<apex:column headerValue="{!$Label.flosum__version}">{!item.duplicateMap[ditem].mani.Version__c}</apex:column>
+					    		<apex:column headerValue="{!$Label.flosum__developer}">{!item.duplicateMap[ditem].mani.Developer__c}</apex:column>
+					    		<apex:column headerValue="{!$Label.flosum__changed_on}">{!item.duplicateMap[ditem].mani.Last_Updated_On__c}</apex:column>
+					    		<apex:column headerValue="{!$Label.flosum__committed_by}">{!item.duplicateMap[ditem].mani.Component_History__r.Committed_By__c}</apex:column>
+					    		<apex:column headerValue="{!$Label.flosum__committed_on}">{!item.duplicateMap[ditem].mani.Component_History__r.Committed_On__c}</apex:column>
+					    		<apex:column headerValue="{!$ObjectType.Flosum__Patch_Manifest__c.fields.Flosum__Source_Name__c.Label}">{!item.duplicateMap[ditem].mani.Source_Name__c}</apex:column>
+					    		<apex:column headerValue="Source Name">{!item.duplicateMap[ditem].mani.Parent_Name__c}</apex:column>
+					    	</apex:pageblockTable>
+				    	</apex:outputPanel>
+				    </apex:pageblocksectionitem>
+		    	</apex:repeat>
+				<apex:outputPanel rendered="{!If(conflictList.size > 0,true,false)}" id="btnBlock" layout="block" styleClass="pagination">
+					<apex:commandbutton value="First" action="{!First}" reRender="conflictBlock,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+					<apex:commandbutton value="Previous" action="{!Previous}" reRender="conflictBlock,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+					<apex:outputText value="{!paginationStr}" styleClass="paginationEle"/>
+					<apex:commandbutton value="Next" action="{!Next}" reRender="conflictBlock,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+					<apex:commandbutton value="Last" action="{!Last}" reRender="conflictBlock,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+				</apex:outputPanel>
+			</apex:pageBlocksection>
+		</apex:pageBlock>
+	</apex:form>
+	<script>
+		Visualforce.remoting.timeout = 120000;
+        var patchId = '';
+        var currentManiIds = [];
+        var currentManiIndex = 0;
+        var messageDots = '.';
+        
+        function listManifest(manifestIdJSON,pId)
+        {
+            patchId = pId;
+            currentManiIds = [];
+            currentManiIndex = 0;
+            if(manifestIdJSON != '' && manifestIdJSON != undefined)
+            {
+	            showInfoMessage('Moving components to patch' + messageDots);
+				if(messageDots.length >= 6)
+	                messageDots = '.';
+	            else
+	                messageDots +='.';
+	            Visualforce.remoting.Manager.invokeAction(
+	                '{!$RemoteAction.MergePatchesExtension.listManifest}',
+	                manifestIdJSON,
+	                handleManifest
+	            );
+            }
+            else
+            {
+            	hide();
+            }
+        }
+        
+        function handleManifest(r,e)
+        {
+            if(e.status && r) 
+            {
+                if(r.length > 0)
+                {
+                    currentManiIds = r;
+                    currentManiIndex = 0;
+                    createManifestAndAttachments();
+                }
+            }
+            else
+            {
+                showMessage(e.message);
+            }
+        }
+                
+        function createManifestAndAttachments()
+        {
+            if(currentManiIndex < currentManiIds.length)
+            {
+                var ctManiIds = currentManiIds[currentManiIndex];
+                showInfoMessage('Moving components to patch' + messageDots);
+				if(messageDots.length >= 6)
+	                messageDots = '.';
+	            else
+	                messageDots +='.';
+                Visualforce.remoting.Manager.invokeAction(
+                    '{!$RemoteAction.MergePatchesExtension.createManifestWithAttachment}',
+                    JSON.stringify(ctManiIds),
+                    patchId,
+                    function handleNext(r,e){
+                        if(e.status)
+                        {
+                        	hasNextManifest();
+                        }
+                        else
+                        {
+                            showMessage(e.message);
+                        }
+                    }
+                );
+            }
+            else
+            {
+            	redirectToPatch();
+            }
+        }
+        
+        function hasNextManifest()
+        {
+        	currentManiIndex++;
+            createManifestAndAttachments();
+        }
+                
+        function showMessage(msg)
+        {
+            var parentVal = $("[id$='msg']");
+            if(parentVal != undefined)
+            {
+                parentVal.html('');
+                if(msg != '')
+                {
+                    var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+                                        '<div class="message errorM3" role="alert">'+
+                                            '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                                '<tbody>'+
+                                                    '<tr valign="top">'+
+                                                        '<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+                                                        '<td class="messageCell">'+
+                                                            '<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+                                                                '<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+                                                                    '<h4>Error:</h4>'+
+                                                                '</span>'+msg+'<br>'+
+                                                            '</div>'+
+                                                        '</td>'+
+                                                    '</tr>'+
+                                                    '<tr>'+
+                                                        '<td></td>'+
+                                                        '<td></td>'+
+                                                    '</tr>'+
+                                                '</tbody>'+
+                                            '</table>'+
+                                        '</div>'+
+                                    '</span>';
+                    parentVal.append(childVal); 
+                }           
+            }
+            hide();
+        }
+        
+        function showInfoMessage(Message_Str)
+        {
+        	var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+			    if(Message_Str != '')
+			    {
+					var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+										'<div class="message infoM3" role="alert">'+
+											'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+												'<tbody>'+
+													'<tr valign="top">'+
+														'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+														'<td class="messageCell">'+
+															'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																	'<h4></h4>'+
+																'</span>'+Message_Str+'<br>'+
+															'</div>'+
+														'</td>'+
+													'</tr>'+
+													'<tr>'+
+														'<td></td>'+
+														'<td></td>'+
+													'</tr>'+
+												'</tbody>'+
+											'</table>'+
+										'</div>'+
+									'</span>';
+					parentVal.append(childVal);
+				}
+			}
+        }
+	</script>
+</apex:page>

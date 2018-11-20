@@ -1,0 +1,2 @@
+<apex:page controller="SDOC.SDUtil" action="{!runSDocsReport}">
+</apex:page>

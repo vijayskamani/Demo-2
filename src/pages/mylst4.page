@@ -1,0 +1,10 @@
+<apex:page standardController="Account" sidebar="ture" showHeader="true" >
+<apex:form id="form">
+    <apex:pageBlock >
+      <apex:pageblockSection >
+        <apex:inputField value="{!Account.name}"/>
+        <apex:inputField value="{!Account.Billingcity}"/>
+      </apex:pageblockSection>
+    </apex:pageBlock>
+</apex:form>
+</apex:page>

@@ -1,0 +1,14 @@
+<aura:component implements="force:lightningQuickAction" >
+    <aura:handler name="init"  value="{!this}" action="{!doitin}" />
+    <aura:attribute name="CSS" type="My_Expen__c[]"/>
+    <Aura:attribute name="NewExpenses" type="My_Expen__c" default="{'Sobjecttype':'My_Expen__c','Name':''}" />
+    
+    <form>
+        <fieldset>
+        <ui:Inputtext aura:id="myexp" label="Name " class="form-control" value="{!v.NewExpenses.Name}" placeholder="My Expenses" />
+       </fieldset>
+    </form>
+	<div class="row">
+    
+    </div>
+</aura:component>

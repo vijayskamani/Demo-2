@@ -1,0 +1,247 @@
+<apex:page controller="Flosum.AddDestructiveChangesController" sidebar="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<c:DynamicLookupScript />
+	<style>
+		div .pagination {
+			text-align: center;
+		}
+		td .dataCell label {
+		font-weight: normal;
+		}
+		span.paginationEle {
+		margin-left: 4px;
+		}
+		.pagination input {
+		margin-left: 4px;
+		} 
+		body .searchRow {
+		  margin-left: 1%;
+		}
+		body .searchRowLast {
+		  margin-left: .5%;
+		}
+	</style>
+	<apex:form id="form">
+		<apex:actionFunction name="listSelectedSnapshotComponents" reRender="pBlock,msg" action="{!listComponentTypes}" oncomplete="hide();" />
+		<apex:pagemessages id="msg"/>
+		<apex:pageBlock title="Add Destructive Items To Patch" id="pBlock">
+			<apex:pageBlockButtons >
+				<apex:commandButton value="Refresh List" action="{!refereshList}" rendered="{!if(compTypeOptions.size>0,true,false)}" oncomplete="hide();" rerender="pBlock,msg" onclick="show();"/>
+		        <apex:commandButton value="Add To Patch" action="{!addToPatch}" rendered="{!if(compTypeOptions.size>0,true,false)}" oncomplete="hide();" rerender="msg" onclick="show();"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlockSection columns="1" id="pbSectionBlock">
+				<apex:pageBlockSectionItem rendered="{!if(patchId != null,true,false)}">
+	            	<apex:outputLabel value="Patch Name :" />
+	            	<apex:outputText value="{!patchName}"/>
+	            </apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem >
+				 	<apex:outputLabel value="Source :" />
+					 <apex:selectList label="Source :" size="1" value="{!selectedSource}" >
+		                <apex:selectOptions value="{!sourceOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listSourceComponents}" oncomplete="hide();" onsubmit="show();"/> 
+		            </apex:selectList>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!IF(selectedSource == RepositoryVal,true,false)}">
+	            	<apex:outputLabel value="Repository :" />
+	            	<apex:selectList label="Repository :" size="1" value="{!selectedRepository}" >
+		                <apex:selectOptions value="{!repositoryOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listComponentTypes}" oncomplete="hide();" onsubmit="show();"/> 
+		            </apex:selectList>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!if(orgOptions.size>0,true,false)}">
+	            	<apex:outputLabel value="Organization :" ></apex:outputLabel>
+	            	<apex:selectList label="Organization :" size="1" value="{!selectedOrg}" >
+		                <apex:selectOptions value="{!orgOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listSnapshot}" oncomplete="hide();" onsubmit="show();"/> 
+		            </apex:selectList>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!IF(snapOptions.size > 0,true,false)}">
+	            	<apex:outputLabel value="Snapshot :" />
+<!-- 	            	<apex:selectList label="Snapshot :" size="1" value="{!selectedSnap}" > -->
+<!-- 		                <apex:selectOptions value="{!snapOptions}" /> -->
+<!-- 		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listComponentTypes}" oncomplete="hide();" onsubmit="show();"/>  -->
+<!-- 		            </apex:selectList> -->
+					<apex:outputPanel >
+			            <apex:inputHidden id="selectedSnap" value="{!selectedSnap}"/>
+			            <apex:inputText size="25" value="{!selectedSnapLabel}" id="selectedSnapLabel" onFocus="this.blur()" disabled="false" html-callitafterchange="listSelectedSnapshotComponents"/>           
+		  		    	<img src="/s.gif" 
+			            onclick="dlm_openLookupPopup('{!$Component.selectedSnapLabel}','{!$Component.selectedSnap}','{!$ObjectType.Snapshot__c.Name}',
+			            '{!$ObjectType.Snapshot__c.fields.Organisation__c.Name} =\'{!selectedOrg}\''); return false" 
+			            class="lookupIcon disableitem" 
+			            onmouseout="this.className='lookupIcon';" 
+			            alt="Patch Name Lookup (New Window)" 
+			            onmouseover="this.className='lookupIconOn';"/>
+		  		    </apex:outputPanel>
+	  		    </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!IF(selectedSource == BranchVal,true,false)}">
+	            	<apex:outputLabel value="Branch :" />
+	            	<apex:selectList label="Branch :" size="1" value="{!selectedBranch}" >
+		                <apex:selectOptions value="{!branchOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listComponentTypes}" oncomplete="hide();" onsubmit="show();"/> 
+		            </apex:selectList>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!IF(compTypeOptions.size > 0,true,false)}">
+	            	<apex:outputPanel >
+		            	<apex:outputLabel value="{!$Label.flosum__component_type} :" />
+		            	<apex:selectList label="{!$Label.flosum__component_type} :" size="1" value="{!selectedType}" >
+			                <apex:selectOptions value="{!compTypeOptions}" />
+			                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!defaultPagination}" oncomplete="hide();" onsubmit="show();"/> 
+			            </apex:selectList>
+			            <apex:inputText value="{!searchText}" styleClass="searchRow"/>   
+			            <apex:commandButton action="{!searchComponent}" value="Search" onClick="show();" onComplete="hide();" reRender="pBlock,msg" styleClass="searchRow" />
+			            <apex:commandButton action="{!hideSearch}" value="Hide Search" onClick="show();" onComplete="hide();" reRender="pBlock,msg" rendered="{!if(IsSearch,true,false)}" styleClass="searchRowLast" />
+		            </apex:outputPanel>
+	            </apex:pageBlockSectionItem>
+			</apex:pageBlockSection>
+			<apex:pageBlockSection id="tb" columns="1">
+				<!--metadata item records -->
+				<script>
+					$( document ).ready(function() {
+					    checkUnCheck();
+					});
+				</script>
+				<apex:pageBlocktable value="{!metaItemList}" var="mi" rendered="{!if(metaItemList.size>0,true,false)}">
+					<apex:column headervalue="Select">
+						<apex:facet name="header"><input type="checkbox" onclick="checkItemAll(this);" class="psli" >&nbsp;</input></apex:facet>
+						<apex:inputCheckbox value="{!mi.checkStatus}" styleclass="sli" onClick="checkUnCheck();"/>
+					</apex:column>
+					<apex:column >
+		        		<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'API_Name__c',If(Order == 'ASC',$Label.flosum__component_name+' ▲',$Label.flosum__component_name+' ▼') ,$Label.flosum__component_name)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="API_Name__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.meta.Flosum__API_Name__c}" />
+					</apex:column>
+					<apex:column >
+		        		<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'RecordType.Name',If(Order == 'ASC',$Label.flosum__component_type+' ▲',$Label.flosum__component_type+' ▼') ,$Label.flosum__component_type)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="RecordType.Name" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.meta.RecordType.Name}" />
+					</apex:column>
+					<apex:column >
+		        		<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'Last_Updated_By__c',If(Order == 'ASC',$Label.flosum__developer+' ▲',$Label.flosum__developer+' ▼') ,$Label.flosum__developer)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Updated_By__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.meta.Flosum__Last_Updated_By__c}" />
+					</apex:column>
+					<apex:column >
+		        		<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'Last_Modified_Date__c',If(Order == 'ASC',$Label.flosum__changed_on+' ▲',$Label.flosum__changed_on+' ▼') ,$Label.flosum__changed_on)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Modified_Date__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.meta.Flosum__Last_Modified_Date__c}" />
+					</apex:column>
+		        </apex:pageBlocktable>
+		        <!--component records -->
+				<apex:pageBlockTable value="{!componentList}" var="mi" rendered="{!if(componentList.size>0,true,false)}">
+					<apex:column headervalue="Select">
+						<apex:facet name="header"><input type="checkbox" onclick="checkItemAll(this);" class="psli" >&nbsp;</input></apex:facet>
+						<apex:inputCheckbox value="{!mi.checkStatus}" styleclass="sli" onClick="checkUnCheck();"/>
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Component_Name__c',If(Order == 'ASC',$Label.flosum__component_name+' ▲',$Label.flosum__component_name+' ▼') ,$Label.flosum__component_name)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Component_Name__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputLabel value="{!mi.comp.Flosum__Component_Name__c}" />
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Component_Type__c',If(Order == 'ASC',$Label.flosum__component_type+' ▲',$Label.flosum__component_type+' ▼') ,$Label.flosum__component_type)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Component_Type__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputLabel value="{!mi.comp.Flosum__Component_Type__c}" />
+					</apex:column>
+					<apex:column >
+		        		<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Last_Modified_By__c',If(Order == 'ASC',$Label.flosum__committed_by+' ▲',$Label.flosum__committed_by+' ▼') ,$Label.flosum__committed_by)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Modified_By__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+		        		<apex:outputLabel value="{!mi.comp.Flosum__Last_Modified_By__c}" />
+		        	</apex:column>
+		        	<apex:column >
+		        		<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Committed_On__c',If(Order == 'ASC',$Label.flosum__committed_on+' ▲',$Label.flosum__committed_on+' ▼') ,$Label.flosum__committed_on)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Committed_On__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+		        		<apex:outputLabel value="{!mi.comp.Flosum__Committed_On__c}" />
+		        	</apex:column>
+				</apex:pageBlockTable>
+		        <apex:outputPanel rendered="{!if((metaItemList.size > 0 || componentList.size > 0) && !IsSearch,true,false)}" layout="block" styleClass="pagination">
+						<apex:commandbutton value="First" action="{!FirstPage}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+						<apex:commandbutton value="Previous" action="{!previous}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+						<apex:outputText value="{!paginationStr}" styleClass="paginationEle"/>
+						<apex:commandbutton value="Next" action="{!next}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+						<apex:commandbutton value="Last" action="{!LastPage}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+				</apex:outputPanel>
+			</apex:pageBlockSection>
+			<apex:outputText value="No records to display." rendered="{!if((metaItemList.size == 0 && componentList.size == 0 )&& IsSearch,true,false)}"/>
+		</apex:pageBlock>
+	</apex:form>
+	<script>
+		function checkItemAll(ele) {
+			var checkboxes = document.getElementsByClassName('sli');
+		     if (ele.checked) {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = true;
+		             }
+		         }
+		     } else {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = false;
+		             }
+		         }
+		     }
+		}
+		
+		function checkUnCheck()
+		{	
+			var checkboxes = document.getElementsByClassName('sli');
+			if(checkboxes != undefined && checkboxes.length > 0)
+			{
+				var allUnChecked = true;
+				var allChecked = true;
+				for(var i = 0; i < checkboxes.length; i++) 
+		        {
+					if(checkboxes[i].type == 'checkbox' && checkboxes[i].checked) 
+		            {
+			        	allUnChecked = false;
+			        }
+		            else if(checkboxes[i].type == 'checkbox' && !checkboxes[i].checked)
+		            {
+		            	allChecked = false;
+		            }
+		        }
+		        if(allChecked)
+		        {
+		        	var parentCheckboxes = document.getElementsByClassName('psli');
+		        	if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+		        	{
+		        		parentCheckboxes[0].checked = true;
+		        	}
+		        }
+		        else if(allUnChecked || (!allUnChecked && !allChecked))
+		        {
+		        	var parentCheckboxes = document.getElementsByClassName('psli');
+		        	if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+		        	{
+		        		parentCheckboxes[0].checked = false;
+		        	}
+		        }
+		    }
+		}
+	</script>
+</apex:page>

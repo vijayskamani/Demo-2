@@ -1,0 +1,598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+    <labels>
+        <fullName>Add_To_Patch_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Add To Patch Title</shortDescription>
+        <value>Add To Patch</value>
+    </labels>
+    <labels>
+        <fullName>Auto_Include_All_Member_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Auto Include All Member Description</shortDescription>
+        <value>This will include all the members for the workflow notifications.</value>
+    </labels>
+    <labels>
+        <fullName>Auto_Include_All_Member_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Auto Include All Member Title</shortDescription>
+        <value>Auto-include all the members for the notifications</value>
+    </labels>
+    <labels>
+        <fullName>Build_Organization_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Build Organization Label</shortDescription>
+        <value>Build and Deploy Organization</value>
+    </labels>
+    <labels>
+        <fullName>Build_Organization_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Build Organization Title</shortDescription>
+        <value>Automated Builds for a Repository</value>
+    </labels>
+    <labels>
+        <fullName>Changed_On</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Changed On</shortDescription>
+        <value>Changed On</value>
+    </labels>
+    <labels>
+        <fullName>Comments</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Comments</shortDescription>
+        <value>Comments</value>
+    </labels>
+    <labels>
+        <fullName>Commit_Time</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Commit Time column</shortDescription>
+        <value>Commit Time</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Description_1</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Description 1</shortDescription>
+        <value>In version control, a branch is an isolated, private area to keep your code changes separate from the main-line code (repository). Multiple developers who work on a particular feature share code in the branch:</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Description_2</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Description 2</shortDescription>
+        <value>They push (commit) those components that are needed for the feature from the snapshot into the branch.</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Description_3</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Description 3</shortDescription>
+        <value>Each time a component is committed into the branch, a new version of it is created in the branch. The branch preserves the older versions of a component if a new version replaces it; thus, accidental overwrite of code becomes a non-issue.</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Description_4</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Description 4</shortDescription>
+        <value>Here, please select the components you want to commit to the branch.</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Description_5</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Description 5</shortDescription>
+        <value>To proceed with the committing of the changes to the branch, we need to check that the components you are committing have not been modified in your branch while you were making the changes.</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Label</shortDescription>
+        <value>Commit to Branch</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Title</shortDescription>
+        <value>Commit to Branch: Select Components</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Branch_Title_2</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Branch Title 2</shortDescription>
+        <value>Commit to Branch: Status</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Repository_Button_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Repository Button Label</shortDescription>
+        <value>Continue Commit to Repository</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Repository_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Repository Description</shortDescription>
+        <value>To proceed with the committing of the changes to the repository, we need to check that the branch components you are committing have not been modified in the repository while you were making the changes in the branch.</value>
+    </labels>
+    <labels>
+        <fullName>Commit_To_Repository_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Commit To Repository Label</shortDescription>
+        <value>Commit to Repository: Status</value>
+    </labels>
+    <labels>
+        <fullName>Commit_the_snapshot_title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Commit the snapshot title</shortDescription>
+        <value>Commit the snapshot</value>
+    </labels>
+    <labels>
+        <fullName>Commiter_ID</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Commiter ID column</shortDescription>
+        <value>Committer</value>
+    </labels>
+    <labels>
+        <fullName>Committed_By</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Committed By</shortDescription>
+        <value>Committed By</value>
+    </labels>
+    <labels>
+        <fullName>Committed_On</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Committed On</shortDescription>
+        <value>Committed On</value>
+    </labels>
+    <labels>
+        <fullName>Component_Name</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Component Name</shortDescription>
+        <value>Component Name</value>
+    </labels>
+    <labels>
+        <fullName>Component_Type</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Component Type</shortDescription>
+        <value>Component Type</value>
+    </labels>
+    <labels>
+        <fullName>Conflict_Components_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Conflict Components Section Description</shortDescription>
+        <value>These components have been modified in the branch since you were editing your changes. Hence, there is a &quot;conflict&quot; that needs to be resolved to ensure that you not overwriting changes from previous versions.</value>
+    </labels>
+    <labels>
+        <fullName>Conflict_Components_Section_Description_2</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Conflict Components Section Description 2</shortDescription>
+        <value>The corrective action is to refactor your code with the latest version of these components from the branch.</value>
+    </labels>
+    <labels>
+        <fullName>Conflict_Components_Section_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Conflict Components Section Title</shortDescription>
+        <value>Components that have conflicts</value>
+    </labels>
+    <labels>
+        <fullName>Conflict_Merge_Components_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>merged component descr</shortDescription>
+        <value>This section includes  components which have conflicts or/and new components</value>
+    </labels>
+    <labels>
+        <fullName>Conflict_Merge_Components_Section_Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>conflict components</shortDescription>
+        <value>Components that will be merged</value>
+    </labels>
+    <labels>
+        <fullName>Create_Patch_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Create Patch Title</shortDescription>
+        <value>Create Patch</value>
+    </labels>
+    <labels>
+        <fullName>Developer</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Developer</shortDescription>
+        <value>Changed By</value>
+    </labels>
+    <labels>
+        <fullName>Email_Template_Descritpion</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Email Template Descritpion</shortDescription>
+        <value>This will enable all the email templates for notifications.</value>
+    </labels>
+    <labels>
+        <fullName>Email_Template_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Email Template Title</shortDescription>
+        <value>Email templates</value>
+    </labels>
+    <labels>
+        <fullName>Fix_The_Logo_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Fix The Logo Description</shortDescription>
+        <value>This will install the latest Flosum logo in your notifications. The logo is used in all the email notifications.</value>
+    </labels>
+    <labels>
+        <fullName>Fix_The_Logo_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Fix The Logo Title</shortDescription>
+        <value>Fix the logo</value>
+    </labels>
+    <labels>
+        <fullName>Git_Credentials</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Git Credentials section title</shortDescription>
+        <value>Git Credentials</value>
+    </labels>
+    <labels>
+        <fullName>Git_Credentials_Name</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Git Credentials Name column</shortDescription>
+        <value>Git Credentials Name</value>
+    </labels>
+    <labels>
+        <fullName>Git_enabled_label</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Git enabled label</shortDescription>
+        <value>Git integration enabled</value>
+    </labels>
+    <labels>
+        <fullName>Go_To_Commit_Button_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Go To Commit Button Label</shortDescription>
+        <value>Continue Commit to Branch</value>
+    </labels>
+    <labels>
+        <fullName>Heroku_service_settings_title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Heroku service settings title</shortDescription>
+        <value>Heroku service settings</value>
+    </labels>
+    <labels>
+        <fullName>Intelegent_Profile_Deployment_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Intelegent Profile Deployment Label</shortDescription>
+        <value>Deploy profile settings only for components included in the patch</value>
+    </labels>
+    <labels>
+        <fullName>List_of_available_components</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>List of available components section title</shortDescription>
+        <value>List of available components</value>
+    </labels>
+    <labels>
+        <fullName>List_of_components_title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>List of components title</shortDescription>
+        <value>List of components</value>
+    </labels>
+    <labels>
+        <fullName>Merge_Patches_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Merge Patches Description</shortDescription>
+        <value>The following components exist in two or more patches. Please select the correct version.</value>
+    </labels>
+    <labels>
+        <fullName>Message</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Message column</shortDescription>
+        <value>Message</value>
+    </labels>
+    <labels>
+        <fullName>Metadata_Types_Setting_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Metadata Types Setting Title</shortDescription>
+        <value>Snapshot Component Types to Retrieve</value>
+    </labels>
+    <labels>
+        <fullName>Modified_In_Last_Days_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Modified In Last Days Label</shortDescription>
+        <value>Retrieve changes in the last</value>
+    </labels>
+    <labels>
+        <fullName>Not_Merge_Components_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>not merged descr</shortDescription>
+        <value>This section includes the components which are identical to those in another branch; they will not be merged</value>
+    </labels>
+    <labels>
+        <fullName>Not_Merge_Components_Section_Title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>not merged</shortDescription>
+        <value>Component that will not be merged</value>
+    </labels>
+    <labels>
+        <fullName>Not_Merge_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Not Merge Section Description</shortDescription>
+        <value>Identical versions of these components already exist in the branch. Hence, they will not be committed to the branch.</value>
+    </labels>
+    <labels>
+        <fullName>Not_Merge_Section_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Not Merge Section Title</shortDescription>
+        <value>Components that will not be committed</value>
+    </labels>
+    <labels>
+        <fullName>Number_of_Components</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Number of Components column</shortDescription>
+        <value>Number of Components</value>
+    </labels>
+    <labels>
+        <fullName>OAuth_Authentication_Details_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>OAuth Authentication Details Title</shortDescription>
+        <value>OAuth Authentication Details</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Applicatoin_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Applicatoin Description</shortDescription>
+        <value>This section will re-arrange the tabs in the following order: Orgs, Snapshot Comparison, Branches, Repository, Commits, Builds, Patches, Dashboards, Settings.</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Applicatoin_Description_2</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Applicatoin Description 2</shortDescription>
+        <value>The tabs will be set in the correct order. However, this order may not be visible to the users since the user customizations have precedence over the default tab ordering. To overwrite the user customizations, please check the flag &quot;Overwrite User&apos;s personal tab customizations&quot; for the user profile.</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Applicatoin_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Applicatoin Title</shortDescription>
+        <value>Applications</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Layout_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Layout Description</shortDescription>
+        <value>This section will set the default layouts for the application.</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Layout_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Layout Title</shortDescription>
+        <value>Layouts</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Page_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Page Description</shortDescription>
+        <value>This page will reset Flosum to recommended factory settings. This will not affect your data.</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Page_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Page Title</shortDescription>
+        <value>Reset Settings</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Profile_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Profile Description</shortDescription>
+        <value>This section will update the following: Custom object permissions, field level security, classes permissions, Visual page access and record type visibilities for the selected profiles.</value>
+    </labels>
+    <labels>
+        <fullName>Post_Install_Profile_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Post Install Profile Title</shortDescription>
+        <value>Profiles</value>
+    </labels>
+    <labels>
+        <fullName>Purge_Button_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Purge Button Label</shortDescription>
+        <value>Analyze Snapshots</value>
+    </labels>
+    <labels>
+        <fullName>Purge_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Purge Description</shortDescription>
+        <value>Snapshots consume the bulk of data storage. This routine analyzes the snapshots that are not referenced in the patches so that the unused snapshots can be deleted.</value>
+    </labels>
+    <labels>
+        <fullName>Purge_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Purge Title</shortDescription>
+        <value>Purge Routine</value>
+    </labels>
+    <labels>
+        <fullName>Release_2017_Feb_Page_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Release 2017 Feb Page Title</shortDescription>
+        <value>This page automates the post-install steps &amp; enables functionality that cannot be auto-enabled during push-upgrades. Please click on each of the buttons below to enable the new functionality.</value>
+    </labels>
+    <labels>
+        <fullName>Remote_Repository</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Remote Repository page title</shortDescription>
+        <value>Remote Repository</value>
+    </labels>
+    <labels>
+        <fullName>Repo_Conflict_Components_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Repo Conflict Components Section Description</shortDescription>
+        <value>These components have been modified in the repository since you were making changes in your branch. Hence, there is a &quot;conflict&quot; that needs to be resolved to ensure that you are not overwriting changes from previous versions.</value>
+    </labels>
+    <labels>
+        <fullName>Repo_Conflict_Components_Section_Description_2</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Repo Conflict Components Section Description 2</shortDescription>
+        <value>The corrective action is to refactor your code with the latest version of these components from the repository.</value>
+    </labels>
+    <labels>
+        <fullName>Repo_Not_Merge_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Repo Not Merge Section Description</shortDescription>
+        <value>Identical versions of these components already exist in the repository. Hence, they will not be committed to the repository.</value>
+    </labels>
+    <labels>
+        <fullName>Repo_Safe_To_Commit_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Repo Safe To Commit Section Description</shortDescription>
+        <value>These components are either being committed for the first time in the repository or the changes were made on the latest copy (version) of the components in the repository. Hence, these components are &quot;safe&quot; to commit.</value>
+    </labels>
+    <labels>
+        <fullName>Repository_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Repository Description</shortDescription>
+        <value>Repository is the master branch or the trunk for version control.</value>
+    </labels>
+    <labels>
+        <fullName>Reset_Settings_Button_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Reset Settings Button Label</shortDescription>
+        <value>Launch Reset Settings page</value>
+    </labels>
+    <labels>
+        <fullName>Reset_Settings_Section_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Reset Settings Section Title</shortDescription>
+        <value>Reset Settings</value>
+    </labels>
+    <labels>
+        <fullName>Run_Test_Label</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Run Test Label</shortDescription>
+        <value>Run Tests on Deployment</value>
+    </labels>
+    <labels>
+        <fullName>SHA1</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>SHA1 column</shortDescription>
+        <value>SHA</value>
+    </labels>
+    <labels>
+        <fullName>Safe_To_Commit_Section_Description</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Safe To Commit Section Description</shortDescription>
+        <value>These components are either being committed for the first time in the branch or the changes were made on the latest copy (version) of the components in the branch. Hence, these components are &quot;safe&quot; to commit.</value>
+    </labels>
+    <labels>
+        <fullName>Safe_To_Commit_Section_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Safe To Commit Section Title</shortDescription>
+        <value>Components that are safe to commit</value>
+    </labels>
+    <labels>
+        <fullName>Snapshot_Comparison_Title</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Snapshot Comparison Title</shortDescription>
+        <value>Snapshot Comparison</value>
+    </labels>
+    <labels>
+        <fullName>The_commit_history_title</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>The commit history section title</shortDescription>
+        <value>The commit history</value>
+    </labels>
+    <labels>
+        <fullName>Update</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Update</shortDescription>
+        <value>Update</value>
+    </labels>
+    <labels>
+        <fullName>Version</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Version</shortDescription>
+        <value>Version</value>
+    </labels>
+    <labels>
+        <fullName>action_column</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>action column</shortDescription>
+        <value>Action</value>
+    </labels>
+    <labels>
+        <fullName>isLinked_column</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>isLinked column</shortDescription>
+        <value>isLinked</value>
+    </labels>
+</CustomLabels>

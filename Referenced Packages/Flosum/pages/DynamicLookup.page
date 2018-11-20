@@ -1,0 +1,45 @@
+<apex:page controller="Flosum.DynamicLookupController" showHeader="false" sideBar="false">
+	<style>
+		a.dynamicSelectNone {
+			float : right;
+		}
+	</style>
+	<apex:form >
+        <apex:outputPanel id="page" layout="block" style="margin:5px;padding:10px;padding-top:2px;">
+            <apex:tabPanel switchType="client" selectedTab="name" id="tabbedPanel">
+                <apex:tab label="Search" name="tab" id="tab">
+                    <apex:actionRegion >  
+                        <apex:outputPanel id="top" layout="block" style="margin:5px;padding:10px;padding-top:2px;">
+                            <apex:outputLabel value="Search" style="font-weight:Bold;padding-right:10px;" for="txtSearch"/>
+                            <apex:inputText id="txtSearch" value="{!searchString}" />
+                            <span style="padding-left:5px">
+                            	<apex:commandButton id="btnGo" value="Go" action="{!Search}" rerender="searchResults"/>
+                            	<apex:outputLink styleClass="dynamicSelectNone" value="javascript:top.window.opener.dlm_lookupPick2('{!valFieldId}','{!labelFieldId}','','', false);javascript:window.close();" >None</apex:outputLink>
+                           	</span>
+                        </apex:outputPanel>
+                            
+                        <apex:outputPanel id="pnlSearchResults" style="margin:10px;height:350px;overflow-Y:auto;" layout="block">
+                            <apex:pageBlock id="searchResults"> 
+	                            <apex:pageBlockTable value="{!resultLi}" var="rec" id="tblResults">
+		                            <apex:column >
+			                            <apex:facet name="header">
+			                            	<apex:outputPanel >{!fieldLabel}</apex:outputPanel>
+			                            </apex:facet>
+			                            <apex:outputLink value="javascript:top.window.opener.dlm_lookupPick2('{!valFieldId}','{!labelFieldId}','{!rec.Id}','{!rec.Name}', false);javascript:window.close();" rendered="{!NOT(ISNULL(rec.Id))}">{!rec.Name}</apex:outputLink>     
+		                            </apex:column>
+	                            </apex:pageBlockTable>
+                            </apex:pageBlock>
+                        </apex:outputPanel>
+                    </apex:actionRegion>
+                </apex:tab>
+            </apex:tabPanel>
+        </apex:outputPanel>
+    </apex:form>
+    <script>
+    	function closeMe()
+	    {  
+	        window.close();
+	    }
+    	window.onblur = closeMe;
+    </script>
+</apex:page>

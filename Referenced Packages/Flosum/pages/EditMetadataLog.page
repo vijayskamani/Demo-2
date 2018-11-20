@@ -1,0 +1,4 @@
+<apex:page standardController="Flosum__Metadata_Log__c" sidebar="false">
+<c:TrackPanel />
+<h1>You can't edit a Metadata Log record.</h1>
+</apex:page>

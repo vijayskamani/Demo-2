@@ -1,0 +1,11 @@
+<apex:page standardController="SDOC__SDoc__c" extensions="SDOC.SDTemplateController" showheader="false"
+contentType="application/msWord#{!dgd.Attachment_Name__c}" cache="true" standardStylesheets="false" action="{!initPreview}">
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:st1="" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<c:SDTemplateCSSComponent />
+<apex:styleSheet value="{!URLFOR($Resource.SDOC__SDoc,'SDoc.css')}" />
+</head>
+<c:SDXMLComponent ></c:SDXMLComponent>
+</html>
+</apex:page>

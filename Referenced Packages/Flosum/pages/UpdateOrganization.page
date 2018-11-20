@@ -1,0 +1,4 @@
+<apex:page doctype="HTML-5.0" standardController="Flosum__Organisation__c" extensions="Flosum.RegisterOrganizationController" sidebar="false">
+<c:TrackPanel />
+<c:Wait />
+</apex:page>

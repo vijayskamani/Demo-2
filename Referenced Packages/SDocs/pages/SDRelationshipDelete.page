@@ -1,0 +1,20 @@
+<apex:Page tabStyle="SDOC__SDRelationship__c"
+    standardController="SDOC__SDRelationship__c"
+    extensions="SDOC.SDUtil">
+
+<!-- Added for security review -->
+<!-- Auto-submit init event in POST form for XSRF protection rather than 
+running init event as GET request in the action attribute of apex:page -->
+<apex:form >
+<apex:actionFunction action="{!deleteAndRedirect}" name="deleteAndRedirect" />
+<apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"/>
+<script type="text/javascript">
+    j$ = jQuery.noConflict();
+    j$().ready(function() {
+        deleteAndRedirect();
+    });
+</script>
+</apex:form>
+
+<apex:outputText value="{!SDOC__SDRelationship__c.SDOC__SDoc__c}" rendered="false"/>
+</apex:page>

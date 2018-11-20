@@ -1,0 +1,29 @@
+<aura:component >
+    <div class="slds-m-top_x-large">
+    <div class="slds-page-header">
+    <div class="slds-align_absolute-center">
+    New Account Creation Form
+    </div>
+    </div>
+    </div>
+    <aura:attribute name="Opportunity" type="Opportunity"/>
+    <aura:attribute name="account" type="account" default="{'sobjecttype':'account'}"/>
+    <div class= "slds-size--3-of-8">
+        <lightning:input type="text" label="Account Name" name="name" value="{!v.account.name}"/><br/>
+        <lightning:input type="text" label="Account Description" name="desc" value="{!v.account.Description}"/><br/>
+        <lightning:input type="text" label="Account Error MSG" name="err" value="{!v.account.Error_msgs__c}"/><br/>
+        <lightning:input type="user" label="Account Owner" name="owner" value="{!v.account.owner}"/><br/>
+        <l_lookup:Lookup objectType="user"
+                         label="Owner"
+                          selectedRecordId="{!v.account.ownerId}"
+                         widthPX="400px">
+        
+        </l_lookup:Lookup>
+        
+        
+        
+        
+          
+         
+    </div>
+</aura:component>

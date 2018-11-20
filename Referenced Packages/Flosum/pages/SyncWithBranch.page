@@ -1,0 +1,2 @@
+<apex:page standardController="Flosum__Branch__c" sidebar="false">
+</apex:page>

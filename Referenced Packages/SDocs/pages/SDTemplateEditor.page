@@ -1,0 +1,2486 @@
+<apex:page StandardController="SDOC__SDTemplate__c" extensions="SDOC.SDTemplateEditor" 
+action="{!init}" standardStylesheets="true" sidebar="false" docType="html-5.0"> 
+<head>
+
+<apex:outputPanel rendered="{!showLightningUI}" layout="none">
+  <apex:slds />
+  <style>
+    .showListButton, .hideListButton { float: left; }
+  </style>
+</apex:outputPanel>
+
+<apex:styleSheet value="{!URLFOR($Resource.SDOC__SDoc,'skin.css')}" />
+<apex:styleSheet value="{!URLFOR($Resource.SDOC__SDoc,'Sdoc.css')}" />
+<apex:stylesheet value="/sCSS/24.0/sprites/1297816277000/Theme3/default/gc/versioning.css" />
+<apex:includeScript value="{!URLFOR($Resource.SDOC__ckEditor,'/ckeditor/ckeditor.js')}"/>
+<apex:includeScript value="{!URLFOR($Resource.SDOC__SDoc,'yahoo-dom-event.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SDOC__SDoc,'container-min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SDOC__SDoc,'animation-min.js')}" />
+<style>
+.buttonStyle { width:75px; height:30px; }
+.buttonStyleCopyToClipboard { width:140px; height:30px; }
+.clipboard_msg { font-size:14px; color:#1E824C; font-weight:bold; padding-top: 8px; }
+textarea { width:100%; height:30px;}
+
+</style>
+
+<script type="text/javascript">
+var AgreementForm = document.getElementById("blur");
+//AgreementForm.style.height = window.screen.availHeight + "px";
+//AgreementForm.style.width = window.screen.availWidth + "px";
+
+var ContainerElem = document.getElementById("StatusBox");
+//ContainerElem.style.display = "block";
+AlignToCenter(ContainerElem);
+
+function AlignToCenter(Element)
+{
+    var availableHeight = 0;
+    var availableWidth = 0;
+    if (Element.ownerDocument)
+    {
+        var docElement = Element.ownerDocument.documentElement;
+        availableHeight = parseInt(docElement.clientHeight);
+        if (availableHeight == "NaN") availableHeight = 0;
+        
+        availableWidth = parseInt(docElement.clientWidth);
+        if (availableWidth == "NaN") availableWidth = 0;
+    }
+
+if (availableHeight == 0 || availableHeight == "NaN")
+    availableHeight = window.screen.availHeight - 200;
+if (availableWidth == 0 || availableWidth == "NaN")
+    availableWidth = window.screen.availWidth - 100;
+
+var msgBoxTop = parseInt((availableHeight - parseInt(Element.clientHeight))/2);
+var msgBoxleft = parseInt((availableWidth - parseInt(Element.style.width))/2);
+
+if (msgBoxTop == "NaN" || msgBoxTop == 0)
+    msgBoxTop = 100;
+
+Element.style.left = msgBoxleft + "px";
+Element.style.top = msgBoxTop + window.pageYOffset + "px";
+}
+
+function reposition(){
+    if(navigator.appName == 'Window Internet Explorer') AgreementForm.style.top = document.body.scrollTop;
+    else AgreementForm.style.top = window.pageYOffset+"px";
+    AlignToCenter(ContainerElem);
+}
+</script>
+<script type="text/javascript">
+    YAHOO.namespace("force.com");
+    YAHOO.force.com.showMe = function() {
+        document.getElementById("myPanel").style.display = "block";
+        YAHOO.force.com.myDialog.show();
+    }
+    YAHOO.force.com.hideMe = function() {
+        YAHOO.force.com.myDialog.hide();
+    }
+    YAHOO.force.com.showLine = function() {
+        document.getElementById("linePanel").style.display = "block";
+        YAHOO.force.com.eDialog.show();
+    }
+    YAHOO.force.com.hideLine = function() {
+        YAHOO.force.com.eDialog.hide();
+    }
+    YAHOO.force.com.showRender = function() {
+        document.getElementById("insertRenderPanel").style.display = "block";
+        YAHOO.force.com.rDialog.show();
+    }
+    YAHOO.force.com.hideRender = function() {
+        YAHOO.force.com.rDialog.hide();
+    }
+
+    
+    YAHOO.force.com.init = function() {
+        document.body.className = document.body.className + " yui-skin-sam";
+        var CKEDITOR   = window.CKEDITOR;
+        if (CKEDITOR.env.ie8){
+            YAHOO.force.com.myDialog = new YAHOO.widget.Panel(
+            "myPanel",
+            { width           :   "800px",visible         :   false,
+             draggable       :   true, close           :   false,  
+             modal           :   true,  fixedCenter     :   true,  zindex          :   100
+            });
+            YAHOO.force.com.eDialog = new YAHOO.widget.Panel(
+            "linePanel",
+            { width           :   "800px",visible         :   false,
+             draggable       :   true, close           :   false,  
+             modal           :   true,  fixedCenter     :   true,  zindex          :   100
+            });
+            YAHOO.force.com.rDialog = new YAHOO.widget.Panel(
+            "insertRenderPanel",
+            { width           :   "800px",visible         :   false,
+             draggable       :   true, close           :   false,  
+             modal           :   true,  fixedCenter     :   true,  zindex          :   100
+            });             
+        }else{
+            YAHOO.force.com.myDialog = new YAHOO.widget.Panel(
+            "myPanel",  // The id of our dialog container
+            { 
+                    width           :   "800px",
+                    visible         :   false,
+                    draggable       :   true,
+                    close           :   true,
+                    modal           :   true,
+                    fixedCenter     :   true,
+                    zindex          :   100,
+                    effect          :   {effect:YAHOO.widget.ContainerEffect.FADE,
+                                          duration:0.3} 
+            }
+            );
+            YAHOO.force.com.eDialog = new YAHOO.widget.Panel("linePanel",
+                {  
+                    // width        :   "900px"
+                    xy          :   [100,80]
+                    ,visible        :   false
+                    ,draggable      :   true
+                    ,close          :   true
+                    ,modal          :   true
+                    ,fixedCenter    :   "contained"
+                    ,zindex         :   100
+                    ,underlay       : "matte"
+                    ,effect         :   {effect:YAHOO.widget.ContainerEffect.FADE,
+                                          duration:0.3} 
+                }
+            );
+            YAHOO.force.com.rDialog = new YAHOO.widget.Panel("insertRenderPanel",
+                {  
+                    width        :   "900px"
+                    //xy          :   [100,80]
+                    ,visible        :   false
+                    ,draggable      :   true
+                    ,close          :   true
+                    ,modal          :   true
+                    ,fixedCenter    :   "contained"
+                    ,zindex         :   100
+                    ,underlay       : "matte"
+                    ,effect         :   {effect:YAHOO.widget.ContainerEffect.FADE,
+                                          duration:0.3} 
+                }
+            );
+       }
+       YAHOO.force.com.eDialog.setHeader("Insert Related List");
+       YAHOO.force.com.myDialog.render(document.body);
+       YAHOO.force.com.eDialog.render(document.body);
+       YAHOO.force.com.rDialog.render(document.body);
+    }
+</script>
+</head>
+
+<div id="insertRenderPanel" style="display: none;">
+        <div class="hd">
+            <apex:outputtext value="Insert Conditional Logic"/> 
+        </div>
+        <div class="bd">
+        <apex:pageMessages />
+        <style>
+        .render_header {
+          font-weight:bold;
+        }
+        </style>
+      <apex:form >
+      <apex:pageBlock id="renderStep1" title="1: Select Conditions">
+        <table>
+          <tr>
+              <apex:outputPanel id="conjHeader" rendered="{!renderAddClicked}" layout="none">
+                <td class="render_header"></td>
+              </apex:outputPanel>
+              <td class="render_header">Field</td>
+              <td class="render_header">Operator</td>
+              <td class="render_header">Value</td>
+          </tr>
+          <tr>
+              <apex:outputPanel id="conjCol" rendered="{!renderAddClicked}" layout="none">
+                <td>
+                  <apex:selectList id="renderConjunction" value="{!renderConjunction}" size="1" style="max-width: 200px;"> 
+                      <apex:selectOptions value="{!renderConjunctionList}" />
+                  </apex:selectList>
+                </td>
+              </apex:outputPanel>
+              <td>
+                <apex:selectList id="renderField" value="{!renderField}" size="1" style="max-width: 200px;"> 
+                    <apex:selectOptions value="{!renderFieldList}"/>
+                    <apex:actionSupport event="onchange" reRender="renderOperator,renderValues,merge_field_output_4"/>
+                </apex:selectList>
+              </td>
+              <td>
+                <apex:selectList id="renderOperator" value="{!renderOperator}" size="1" style="max-width: 200px;"> 
+                    <apex:selectOptions value="{!renderOperatorList}" />
+                </apex:selectList>
+              </td>
+              <td>
+                <apex:outputPanel id="renderValues">
+                  <apex:outputPanel rendered="{!renderValueType == 'PICKLIST' || renderValueType == 'BOOLEAN'}">
+                    <apex:selectList id="picklistRenderValue" value="{!renderValue}" size="1" style="max-width: 200px;"> 
+                        <apex:selectOptions value="{!renderValueOptions}" />
+                    </apex:selectList>
+                  </apex:outputPanel>
+                  <apex:outputPanel rendered="{!renderValueType == 'String'}">
+                    <apex:inputText id="renderValue" value="{!renderValue}"/>
+                  </apex:outputPanel>
+                  <apex:outputPanel rendered="{!renderValueType == 'DATE'}">
+                    <apex:input id="renderDate" type="date" value="{!renderValueDate}"/>
+                  </apex:outputPanel>
+                </apex:outputPanel>
+              </td>
+          </tr>
+        </table>
+          <apex:commandButton value="Add Condition" action="{!addRenderCondition}" 
+          reRender="renderStep1,renderStep2,renderStep3,renderButtons,merge_field_output_4"/>
+          <apex:commandButton value="Reset Condition" action="{!resetRenderCondition}" 
+          reRender="renderStep1,renderStep2,renderStep3,renderButtons,merge_field_output_4"/>
+      </apex:pageBlock>
+      <apex:pageBlock id="renderStep2" title="2: Group Conditions with Parentheses">
+      <div class="ft" style="font-size: 11px;">
+          <apex:outputPanel layout="block">
+          In this step, you may add parentheses to group the conditions per your requirements.
+          If you click "Add Condition" again, your changes to this field will be preserved, and the new condition
+          will be appended to the text currently displayed in this field.
+          </apex:outputPanel>
+        </div>
+        <apex:inputText style="width:100%;" value="{!renderConditions}"/>
+      </apex:pageBlock>
+      <apex:pageBlock id="renderStep3" title="3: Enter Conditionally-Rendered Contents">
+      <apex:pageblocksection columns="6">
+               <apex:pageblocksectionItem >
+                  <apex:outputpanel id="l1">
+                      <apex:outputtext value="{!f1Obj}" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!f1}" size="12" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!f1List}" />
+                              <apex:actionSupport event="onchange" action="{!level1}" rerender="l2,l3,o,merge_field_output_4" status="statLoad1"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+                </apex:pageblocksectionItem>
+                <apex:outputpanel id="l2">
+                  <apex:outputtext value="{!f2Obj}" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!f2}" size="12" id="f2"  rendered="{!NOT(ISNULL(f2List))}" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!f2List}" />
+                          <apex:actionSupport event="onchange" action="{!level2}" rerender="l3,o,merge_field_output_4" status="statLoad1"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+                <apex:outputpanel id="l3">
+                  <apex:outputtext value="{!f3Obj}" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!f3}" size="12" id="f3"  rendered="{!NOT(ISNULL(f3List))}" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!f3List}" />
+                          <apex:actionSupport event="onchange" action="{!level3}" rerender="o,merge_field_output_4" status="statLoad1"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+              </apex:pageblocksection>
+              <apex:outputPanel id="o" >
+                  <apex:pageblocksection >
+                      <apex:pageblocksectionItem rendered="{!NOT(isNum)&& NOT(isDate)}">  
+                          <apex:inputcheckbox value="{!checked}" >
+                              <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o,merge_field_output_4" status="statLoad1"/>
+                          </apex:inputcheckbox>
+                          <apex:outputLabel value="This field value contains HTML, Rich Text or images"/>
+                      </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection rendered="{!isDate}">
+                      <apex:pageblocksectionItem >
+                          <apex:outputLabel value="Format Date:"/>
+                          <apex:actionRegion >
+                            <apex:selectList value="{!fdoption}" size="1" id="fdo"> 
+                              <apex:selectOptions value="{!fdoptions}" />
+                              <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o,merge_field_output_1,merge_field_output_4" status="statLoad1"/>
+                            </apex:selectList>
+                          </apex:actionRegion>
+                      </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection rendered="{!isNum}">
+                      <apex:pageblocksectionItem >
+                          <apex:outputLabel value="Format Number:"/>
+                          <apex:actionRegion >
+                            <apex:selectList value="{!fcoption}" size="1" id="fco"> 
+                                <apex:selectOptions value="{!fcoptions}" />
+                                <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o,merge_field_output_1" status="statLoad1"/>
+                            </apex:selectList>
+                          </apex:actionRegion>
+                       </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection columns="1">
+                      <apex:inputText id="merge_field_output_1" value="{!output}" size="100"/>
+                      <apex:commandButton value="Add Field" action="{!addToRenderContents}" rendered="{!NOT(ISNULL(output))}" 
+                      style="font-size:14px;" reRender="renderStep1,renderStep2,renderStep3,renderButtons,merge_field_output_4"/>
+                  </apex:pageblocksection>
+              </apex:outputPanel>
+              <apex:pageBlockSection columns="1">
+                <apex:inputTextarea value="{!renderContents}" style="width: 100%; height: 3em;" rows="6">
+                  <apex:actionSupport event="onkeyup" action="{!donothing}" rerender="renderButtons,merge_field_output_4" status="statLoad1"/>
+                </apex:inputTextarea>
+              </apex:pageBlockSection>
+      </apex:pageBlock>
+        <apex:outputPanel id="renderButtons">
+          <div style="text-align: center;" >
+            <apex:outputPanel rendered="{!NOT(isMSX)}">
+              <apex:commandButton value="Insert" onclick="insertRender('{!renderComplete}');" 
+              reRender="renderStep1,renderStep2,renderStep3,renderButtons" oncomplete="resetRenderComplete();" 
+              styleClass="buttonStyle"  style="font-size:14px;" status="statLoad3"/>
+              <apex:commandButton value="Reset" action="{!resetRenderComplete}" styleClass="buttonStyle"  
+              reRender="renderStep1,renderStep2,renderStep3,renderButtons" style="font-size:14px;" status="statLoad3"/>
+              <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideRender();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad3"/>
+              <apex:actionFunction action="{!resetRenderComplete}" name="resetRenderComplete" rerender="renderStep1,renderStep2,renderStep3,renderButtons"/>
+            </apex:outputPanel>
+            <apex:outputPanel rendered="{!isMSX}">
+              <apex:inputTextarea id="merge_field_output_4" value="{!renderComplete}" rows="6" style="width: 90%; height: 3em;"/>
+              <br />
+              <apex:commandButton value="Copy" onclick="copyToClipboardMergeField(4);" 
+              reRender="renderStep1,renderStep2,renderStep3,renderButtons" oncomplete="resetRenderComplete();" 
+              styleClass="buttonStyle"  style="font-size:14px;" status="statLoad3"/>
+              <apex:commandButton value="Reset" action="{!resetRenderComplete}" styleClass="buttonStyle"  
+              reRender="renderStep1,renderStep2,renderStep3,renderButtons" style="font-size:14px;" status="statLoad3"/>
+              <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideRender();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad3"/>
+              <apex:actionFunction action="{!resetRenderComplete}" name="resetRenderComplete" rerender="renderStep1,renderStep2,renderStep3,renderButtons,merge_field_output_4"/>
+            </apex:outputPanel>
+
+          </div>
+        </apex:outputPanel>
+      </apex:form>
+      </div>
+
+    </div>
+
+
+
+<div id="myPanel" style="display: none">
+    <div class="hd">
+        <apex:outputtext value="Insert Field"/> 
+    </div>
+    <div class="bd">
+    <apex:form >
+      <apex:tabPanel id="insert-field-tab-panel" reRender="insert-field-tab-panel" switchType="client">
+        <apex:tab label="{!SDOC__SDTemplate__c.SDOC__Base_Object__c} Fields" style="font-weight:bold;">
+          <apex:actionStatus id="statLoad1">
+                  <apex:facet name="start">
+                      <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+                      </div>
+                      <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+                      <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+                      border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+                      border-right-color:#336699; background-color:#ffffff;">
+                      <tr>
+                      <td align="left" valign="top">
+                      <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+                      <tr>
+                      <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+                      <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+                      <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+                      &nbsp;Loading...</td>
+                      </tr>
+                      </table>
+                      </td>
+                      </tr>
+                      </table>
+                      </div>
+                  </apex:facet>
+              </apex:actionStatus>
+          <apex:pageBlock id="block2" >
+            <div class="ft" style="font-size: 11px; font-weight: normal;">
+            <apex:outputPanel layout="block">
+              Select a field, then click 
+              <apex:outputPanel rendered="{!NOT(isMSX)}" > Insert. </apex:outputPanel> 
+              <apex:outputPanel rendered="{!isMSX}"> Copy To Clipboard. </apex:outputPanel> 
+              Labels followed by a ">" indicate that there are more fields available. 
+              If you need to extend further, you can manually edit the value or consider creating a formula field on your
+              base object: {!SDOC__SDTemplate__c.SDOC__Base_Object__c}.
+            </apex:outputPanel>
+          </div>
+              <apex:pageblocksection columns="6">
+               <apex:pageblocksectionItem >
+                  <apex:outputpanel id="l1">
+                      <apex:outputtext value="{!f1Obj}" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!f1}" size="12" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!f1List}" />
+                              <apex:actionSupport event="onchange" action="{!level1}" rerender="l2,l3,o" status="statLoad1"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+                </apex:pageblocksectionItem>
+                <apex:outputpanel id="l2">
+                  <apex:outputtext value="{!f2Obj}" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!f2}" size="12" id="f2"  rendered="{!NOT(ISNULL(f2List))}" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!f2List}" />
+                          <apex:actionSupport event="onchange" action="{!level2}" rerender="l3,o" status="statLoad1"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+                <apex:outputpanel id="l3">
+                  <apex:outputtext value="{!f3Obj}" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!f3}" size="12" id="f3"  rendered="{!NOT(ISNULL(f3List))}" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!f3List}" />
+                          <apex:actionSupport event="onchange" action="{!level3}" rerender="o" status="statLoad1"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+              </apex:pageblocksection>
+              <apex:outputPanel id="o" >
+                  <apex:pageblocksection >
+                      <apex:pageblocksectionItem rendered="{!NOT(isNum)&& NOT(isDate)}">  
+                          <apex:inputcheckbox value="{!checked}" >
+                              <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o" status="statLoad1"/>
+                          </apex:inputcheckbox>
+                          <apex:outputLabel value="This field value contains HTML, Rich Text or images"/>
+                      </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection rendered="{!isDate}">
+                      <apex:pageblocksectionItem >
+                          <apex:outputLabel value="Format Date:"/>
+                          <apex:actionRegion >
+                            <apex:selectList value="{!fdoption}" size="1" id="fdo"> 
+                              <apex:selectOptions value="{!fdoptions}" />
+                              <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="insertFieldBtn" status="statLoad1"/>
+                            </apex:selectList>
+                           </apex:actionRegion>
+                      </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection rendered="{!isNum}">
+                      <apex:pageblocksectionItem >
+                          <apex:outputLabel value="Format Number:"/>
+                          <apex:actionRegion >
+                            <apex:selectList value="{!fcoption}" size="1" id="fco"> 
+                                <apex:selectOptions value="{!fcoptions}" />
+                                <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="insertFieldBtn,merge_field_output_1" status="statLoad1"/>
+                            </apex:selectList>
+                         </apex:actionRegion>
+                       </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection id="insertFieldBtn" columns="1">
+                       <apex:outputLabel value="{!mergeFieldInsertMsg}"/>
+                      <apex:inputText id="merge_field_output_1" value="{!output}" size="100"/>
+                      <apex:commandButton value="Insert" oncomplete="insert('{!output}');" rendered="{!NOT(ISNULL(output))&& NOT(isMSX)}"  
+                      styleClass="buttonStyle" style="font-size:14px;"/>
+                      <apex:commandButton value="Copy to Clipboard" onclick="copyToClipboardMergeField(1);" rendered="{!NOT(ISNULL(output)) && isMSX}"  
+                      styleClass="buttonStyleCopyToClipboard" rerender="output" style="font-size:14px;"/>
+                      <div class="clipboard_msg clipboard_msg_1"></div>
+                  </apex:pageblocksection>
+              </apex:outputPanel>
+            </apex:pageBlock>
+          </apex:tab>
+
+        
+            <apex:tab label="Runtime Prompt Fields" style="font-weight:bold;">
+              <apex:outputPanel rendered="{!ucUserChoices.isEmpty}">
+                You do not have any runtime prompts defined. Click on the "Runtime Prompts" tab to define user input fields.
+              </apex:outputPanel>
+              <apex:outputPanel rendered="{!NOT(ucUserChoices.isEmpty)}">
+                <apex:actionStatus id="statLoad2">
+                    <apex:facet name="start">
+                        <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+                        </div>
+                        <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+                        <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+                        border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+                        border-right-color:#336699; background-color:#ffffff;">
+                        <tr>
+                        <td align="left" valign="top">
+                        <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+                        <tr>
+                        <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+                        <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+                        <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+                        &nbsp;Loading...</td>
+                        </tr>
+                        </table>
+                        </td>
+                        </tr>
+                        </table>
+                        </div>
+                    </apex:facet>
+                </apex:actionStatus>
+                <apex:pageBlock id="block-2-user-choice" >
+                    <apex:pageblocksection columns="6">
+                     <apex:pageblocksectionItem >
+                        <apex:outputpanel id="l1-user-choice">
+                            <apex:selectList value="{!ucInsertField_mergeFieldname}" size="12" style="max-width: 200px;"> 
+                                <apex:selectOptions value="{!ucUserChoices.userChoiceMergeFieldNames}" />
+                                    <apex:actionSupport event="onchange" action="{!ucInsertField_select}" rerender="o-user-choice" status="statLoad2"/>
+                            </apex:selectList>
+                        </apex:outputpanel>
+                      </apex:pageblocksectionItem>
+                    </apex:pageblocksection>
+                    <apex:outputPanel id="o-user-choice" >
+                        <apex:pageblocksection rendered="{!ucInsertField_isDate}">
+                            <apex:pageblocksectionItem >
+                                <apex:outputLabel value="Format Date:"/>
+                                <apex:actionRegion >
+                                  <apex:selectList value="{!ucInsertField_formatDateOption}" size="1" id="fdo-user-choice">
+                                    <apex:selectOptions value="{!fdoptions}" />
+                                    <apex:actionSupport event="onchange" action="{!ucInsertField_select}" rerender="o-user-choice" status="statLoad2"/>
+                                  </apex:selectList>
+                                </apex:actionRegion>
+                            </apex:pageblocksectionItem>
+                        </apex:pageblocksection>
+                        <!--apex:pageblocksection rendered="{!isNum}">
+                            <apex:pageblocksectionItem >
+                                <apex:outputLabel value="Format Number:"/>
+                                <apex:selectList value="{!ucInsertField_formatNumOption}" size="1" id="fco-user-choice"> 
+                                    <apex:selectOptions value="{!fcoptions}" />
+                                    <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o-user-choice" status="statLoad2"/>
+                                 </apex:selectList>
+                             </apex:pageblocksectionItem>
+                        </apex:pageblocksection-->
+                        <apex:pageblocksection columns="1">
+                             <apex:outputLabel value="{!mergeFieldInsertMsg}"/>
+                            <apex:inputText id="merge_field_output_2" value="{!ucInsertField_output}" size="100"/>
+                            <apex:commandButton value="Insert" oncomplete="insert('{!ucInsertField_output}');" rendered="{!NOT(ISNULL(ucInsertField_output)) && NOT(isMSX)}"  
+                            styleClass="buttonStyle" style="font-size:14px;"/>
+                            <apex:commandButton value="Copy to Clipboard" onclick="copyToClipboardMergeField(2);" rendered="{!NOT(ISNULL(ucInsertField_output)) && isMSX}"  
+                            styleClass="buttonStyleCopyToClipboard" rerender="output" style="font-size:14px;"/>
+                            <div class="clipboard_msg clipboard_msg_2"></div>
+                        </apex:pageblocksection>
+                    </apex:outputPanel>
+                </apex:pageBlock>
+              </apex:outputPanel>
+          </apex:tab>
+
+          <apex:tab label="Special Merge Fields" style="font-weight:bold;">
+          <apex:actionStatus id="statLoad4">
+                  <apex:facet name="start">
+                      <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+                      </div>
+                      <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+                      <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+                      border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+                      border-right-color:#336699; background-color:#ffffff;">
+                      <tr>
+                      <td align="left" valign="top">
+                      <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+                      <tr>
+                      <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+                      <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+                      <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+                      &nbsp;Loading...</td>
+                      </tr>
+                      </table>
+                      </td>
+                      </tr>
+                      </table>
+                      </div>
+                  </apex:facet>
+              </apex:actionStatus>
+          <apex:pageBlock id="specialblock2" >
+            <div class="ft" style="font-size: 11px; font-weight: normal;">
+            <apex:outputPanel layout="block">
+              To provide you with an increased range of easy-to-use templated data, S-Docs includes a special set of merged fields. For more information, click
+              <a href="http://www.sdocs.com/resources/documentation/special-merged-fields-in-s-docs/">here.</a>
+            </apex:outputPanel>
+          </div>
+              <apex:pageblocksection columns="6">
+               <apex:pageblocksectionItem >
+                  <apex:outputpanel id="l1">
+                      <apex:outputtext value="Special Merge Field" style="font-weight : bold;"/><br />
+                      <apex:selectList value="{!specialMergeObject}" size="12" style="max-width: 200px;"> 
+                          <apex:selectOptions value="{!specialMergeList}" />
+                              <apex:actionSupport event="onchange" action="{!setSpecialMergeValue}" rerender="l2,l3,o" status="statLoad4"/>
+                      </apex:selectList>
+                  </apex:outputpanel>
+                </apex:pageblocksectionItem>
+              </apex:pageblocksection>
+              <apex:pageblocksection rendered="{!isDate}">
+                      <apex:pageblocksectionItem >
+                          <apex:outputLabel value="Format Date:"/>
+                          <apex:actionRegion >
+                            <apex:selectList value="{!fdoption}" size="1" id="fdsm"> 
+                                <apex:selectOptions value="{!fdoptions}" />
+                                <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o" status="statLoad4"/>
+                            </apex:selectList>
+                          </apex:actionRegion>
+                      </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+                  <apex:pageblocksection rendered="{!isNum}">
+                      <apex:pageblocksectionItem >
+                          <apex:outputLabel value="Format Number:"/>
+                          <apex:actionRegion >
+                            <apex:selectList value="{!fcoption}" size="1" id="fcsm"> 
+                              <apex:selectOptions value="{!fcoptions}" />
+                              <apex:actionSupport event="onchange" action="{!checktoggle}" rerender="o" status="statLoad4"/>
+                            </apex:selectList>
+                          </apex:actionRegion>
+                       </apex:pageblocksectionItem>
+                  </apex:pageblocksection>
+              <apex:outputPanel id="o" >
+                  <apex:pageblocksection columns="1">
+                       <apex:outputLabel value="{!mergeFieldInsertMsg}"/>
+                      <apex:inputText id="merge_field_output_1" value="{!specialMergeOutput}" size="100"/>
+                      <apex:commandButton value="Insert" oncomplete="insert('{!specialMergeOutput}');" rendered="{!NOT(ISNULL(specialMergeOutput))&& NOT(isMSX)}"  
+                      styleClass="buttonStyle" style="font-size:14px;"/>
+                      <apex:commandButton value="Copy to Clipboard" onclick="copyToClipboardMergeField(1);" rendered="{!NOT(ISNULL(specialMergeOutput)) && isMSX}"  
+                      styleClass="buttonStyleCopyToClipboard" rerender="output" style="font-size:14px;"/>
+                      <div class="clipboard_msg clipboard_msg_1"></div>
+                  </apex:pageblocksection>
+              </apex:outputPanel>
+            </apex:pageBlock>
+          </apex:tab>
+
+
+          <apex:tab label="Other Templates" style="font-weight:bold;">
+              <apex:outputPanel >
+                <apex:actionStatus id="statLoad5">
+                    <apex:facet name="start">
+                        <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+                        </div>
+                        <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+                        <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+                        border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+                        border-right-color:#336699; background-color:#ffffff;">
+                        <tr>
+                        <td align="left" valign="top">
+                        <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+                        <tr>
+                        <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+                        <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+                        <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+                        &nbsp;Loading...</td>
+                        </tr>
+                        </table>
+                        </td>
+                        </tr>
+                        </table>
+                        </div>
+                    </apex:facet>
+                </apex:actionStatus>
+                <apex:pageBlock id="block-2-component" >
+                  <div class="ft" style="font-size: 11px; font-weight: normal;">
+                    <apex:outputPanel layout="block">
+                      Templates with a <em>Template Format</em> of 'Component' and with <em>Available For Use</em> checked are displayed here. You can select one of these templates and insert it into the current template as a merge field. The component's <em>Related to Type</em> is displayed between brackets next to its name, e.g. <em>[Opportunity] myComponentName</em>. Note that if the component does not have the same <em>Related to Type</em> as this template, the component's merge fields will not merge.
+                    </apex:outputPanel>
+                  </div>
+                  <apex:outputPanel rendered="{!insertComponent_noComponents}">
+                    <br />
+                    <strong>No template components have been defined.</strong>
+                  </apex:outputPanel>
+                  <apex:outputPanel rendered="{!NOT(insertComponent_noComponents)}">
+                    <apex:pageblocksection columns="6">
+                     <apex:pageblocksectionItem >
+                        <apex:outputpanel id="l1-component">
+                            <apex:selectList value="{!insertComponent_selectedMergeField}" size="12" style="max-width: 600px;"> 
+                                <apex:selectOptions value="{!insertComponent_mergeFieldNames}" />
+                                    <apex:actionSupport event="onchange" action="{!insertComponent_select}" rerender="o-component" status="statLoad5"/>
+                            </apex:selectList>
+                        </apex:outputpanel>
+                      </apex:pageblocksectionItem>
+                    </apex:pageblocksection>
+
+                    <apex:outputPanel id="o-component" >
+                        <apex:pageblocksection columns="1">
+                             <apex:outputLabel value="{!mergeFieldInsertMsg}"/>
+                            <apex:inputText id="merge_field_output_3" value="{!insertComponent_output}" size="100"/>
+                            <apex:commandButton value="Insert" oncomplete="insert('{!insertComponent_output}');" rendered="{!NOT(ISNULL(insertComponent_output)) && NOT(isMSX)}"  
+                            styleClass="buttonStyle" style="font-size:14px;"/>
+                            <apex:commandButton value="Copy to Clipboard" onclick="copyToClipboardMergeField(3);" rendered="{!NOT(ISNULL(insertComponent_output)) && isMSX}"  
+                            styleClass="buttonStyleCopyToClipboard" rerender="output" style="font-size:14px;"/>
+                            <div class="clipboard_msg clipboard_msg_3"></div>
+                        </apex:pageblocksection>
+                    </apex:outputPanel>
+                  </apex:outputPanel>
+                </apex:pageBlock>
+              </apex:outputPanel>
+          </apex:tab>
+        </apex:tabPanel>
+
+
+
+        <div style="text-align: center;" >
+            <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideMe();"/>
+        </div>
+    </apex:form>
+    </div>
+
+</div>
+<style type="text/css">
+.hiddenTextArea {
+  position: fixed;
+  top: 0;
+  left: 0;
+
+  width: 2em;
+  height: 2em;
+
+  padding: 0;
+
+  border: none;
+  outline: none;
+  boxShadow: none;
+
+  background: transparent;
+}
+</style>
+<script type="text/javascript">
+  function copyToClipboard(id, dataType, clipboardMsgClassName) {
+    var text = document.querySelector('*[id*="' + id + '"]');
+    text.select();
+    var successful = document.execCommand('copy');
+    if (dataType !== null && clipboardMsgClassName !== null) {
+      var msg;
+      if (successful) {
+        msg = 'Copied ' + dataType +  ' to clipboard! You can now paste this into your {!SDOC__SDTemplate__c.SDOC__Template_Format__c} Document.';
+      } else {
+        msg = 'Failed to copy related list data.';
+      }
+      setClipboardMsg(msg, clipboardMsgClassName);
+      
+      setTimeout(function() {
+        setClipboardMsg('', clipboardMsgClassName);
+      }, 4000);
+    }
+  }
+
+  function copyToClipboardRelatedList() {
+    copyToClipboard('output', 'related list', 'clipboard_msg_rl');
+  }
+
+  function copyToClipboardMergeField(tabNum) {
+    copyToClipboard(
+      'merge_field_output_' + tabNum, 
+      'merge field', 
+      'clipboard_msg_' + tabNum
+    );
+  }
+
+  function setClipboardMsg(msg, clipboardMsgClassName) {
+    var messageDivs = document.querySelectorAll('div[class*="' + clipboardMsgClassName + '"]');
+    for (var i = 0; i < messageDivs.length; i++) {
+      messageDivs[i].innerHTML = msg;
+    }
+  }
+</script>
+<div id="linePanel" style="display: none">
+<apex:tabPanel switchType="client" selectedTab="name1" id="theTabPanel" 
+styleClass="theTabPanel" tabClass="theTabPanel" contentClass="tabContent" 
+activeTabClass="activeTab" inactiveTabClass="inactiveTab" width="900px">
+<apex:tab label="Select Data Columns" name="tab1" id="tabOne">
+
+    <apex:actionStatus id="statLoad2">
+        <apex:facet name="start">
+            <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+            </div>
+            <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+            <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+            border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+            border-right-color:#336699; background-color:#ffffff;">
+            <tr>
+            <td align="left" valign="top">
+            <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+            <tr>
+            <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+            <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+            <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+            &nbsp;Loading...</td>
+            </tr>
+            </table>
+            </td>
+            </tr>
+            </table>
+            </div>
+        </apex:facet>
+    </apex:actionStatus>
+
+    <div id="form" class="bd">
+    <apex:form >
+        <div class="ft" style="font-size: 11px;">
+        <apex:outputPanel layout="block">
+        Related lists are merged as tables (with rows and columns) into your document.
+        Select a related list object from the picklist below.
+        Then choose fields that you want included as columns for your table.
+        Columns are rendered from left to right based on their order in the "Selected Columns" list below.
+        <apex:outputPanel rendered="{!NOT(isMSX)}">
+        An "Insert Table" button will appear that allows you to embed the table into your template. 
+        Note: only the header row will appear in the template graphical view. Data rows are merged when the document is generated.
+        </apex:outputPanel>
+        <apex:outputPanel rendered="{!isMSX}">
+        Once you have selected your columns, you have the option to format the data columns and add filter conditions &amp; sort orders in the next two tabs.
+        When you're done building your related list, you can copy it from the <em>{!relatedListTabFiveLabel}</em> tab
+        and paste it into your {!SDTemplate__c.Template_Format__c} document.
+        </apex:outputPanel>
+        </apex:outputPanel>
+        </div>         
+        <div class="ft" style="font-size: 12px;">
+          <div style="font-size: 11px;">
+          <apex:outputPanel layout="block">
+          Alternatively, S-Docs Direct SOQL feature is a valuable option when standard related list options still do not meet your requirements.
+          To use S-Docs Direct SOQL, click on the checkbox below and select an object from the picklist below, or optionally define your own SOQL query in the text box. For more details, click 
+          <a href="http://www.sdocs.com/resources/documentation/using-s-docs-direct-soql-feature-for-related-list/" target="_blank">
+          here.
+          </a>
+
+          </apex:outputPanel>
+          </div>
+          <apex:outputPanel id="directDiv">
+            Direct SOQL 
+            <apex:inputCheckbox value="{!rld.directSOQL}">
+            <apex:actionSupport event="onchange" action="{!setDirectSOQLObject}" 
+            rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists,ckEditorReplace" status="statLoad2"/>
+            </apex:inputCheckbox>
+          </apex:outputPanel>
+        </div>
+        <apex:outputPanel id="pastRelatedLists">
+          <apex:pageBlock id="relatedListChoose" title="Edit a Previous Related List">
+          <apex:pageblocksection >
+                  <apex:outputLabel for="selectList" value="Available Related List:"/>
+                  <apex:outputPanel id="selectAndDelete">
+                    <apex:selectList id="selectList" value="{!rldChoice}" size="1"> 
+                        <apex:selectOptions value="{!rldOptions}"/>
+                        <apex:actionSupport event="onchange" action="{!loadRLD}" 
+                        rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists,ckEditorReplace,selectAndDelete" status="statLoad2"/>
+                    </apex:selectList>
+                    &nbsp;&nbsp;&nbsp;&nbsp;
+                    <apex:commandButton value="Delete List" immediate="true" action="{!deleteOldRLD}" oncomplete="ckEditorDelete();" 
+                    rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,selectList,pastRelatedLists,ckEditorReplace"
+                    style="font-size:10px;" status="statLoad3" rendered="{!oldRLD}" id="deleteList"/>
+                    <apex:commandButton id="refreshRelList" value="Refresh Related Lists (Saves Template)" 
+                    style="font-size:10px;"
+                    action="{!saveAndRefresh}"/>
+                  </apex:outputPanel>
+              </apex:pageblocksection>
+          </apex:pageBlock>
+        </apex:outputPanel>
+        <!-- Direct SOQL -->
+        <apex:outputPanel id="selectobjects"> 
+          <apex:pageBlock id="block4objects" title="Step 1: Select an Object" rendered="{!rld.directSOQL}">
+              <apex:pageblocksection >
+                  <apex:outputLabel for="selectobject" value="Available Objects:"/>
+                  <apex:selectList id="selectobject" value="{!rld.directSOQLObjectName}" size="1"> 
+                      <apex:selectOptions value="{!objectsList}"/>
+                      <apex:actionSupport event="onchange" action="{!setDirectSOQLObject}" rerender="rl2,rl3,rl4,p,bt2,badObject,ckEditorReplace" status="statLoad2"/>
+                  </apex:selectList>
+                  <apex:outputLabel for="sl1" value="Query to be executed (optional):"/>
+                  <apex:inputTextarea id="soqllist" value="{!rld.soqlquery}" style="width:80%;" rows="3">
+                    <apex:actionSupport event="onchange" action="{!updateO}" rerender="op,ckEditorReplace" status="statLoad2"/>
+                  </apex:inputTextarea>
+              </apex:pageblocksection>
+              <apex:pageMessages id="badObject"/>
+         </apex:pageBlock>
+        </apex:outputPanel>
+        <!-- Related List -->
+        <apex:outputPanel id="selectrelated" >
+          <apex:pageBlock id="block4" title="Step 1: Select a Related List" rendered="{!NOT(rld.directSOQL)}">
+              <apex:pageblocksection >
+                  <apex:outputLabel for="sl1" value="Available Related Lists for {!SDOC__SDTemplate__c.SDOC__Base_Object__c}:"/>
+                  <apex:selectList id="sl1" value="{!rl1}" size="1"> 
+                      <apex:selectOptions value="{!rl1List}" />
+                      <apex:actionSupport event="onchange" action="{!levelRL1}" rerender="rl2,rl3,rl4,p,bt2,ckEditorReplace" status="statLoad2"/>
+                  </apex:selectList>
+              </apex:pageblocksection>
+          </apex:pageBlock>
+        </apex:outputPanel>
+       <apex:pageBlock id="block5" title="Step 2: Choose Table Columns">
+            <apex:pageblocksection columns="10">
+                <apex:panelGrid id="rl2">
+                    <apex:outputtext value="Object: {!rl1Obj}" style="font-weight : bold;"/>
+                    <apex:outputtext value="Available Fields: "/>
+                    <apex:selectList value="{!rl2}" size="12" id="f4" style="max-width: 200px;"> 
+                        <apex:selectOptions value="{!rl2List}" />
+                        <apex:actionSupport event="onchange" action="{!levelRL2}" rerender="rl3,rl4,ckEditorReplace" status="statLoad2"/>
+                    </apex:selectList>
+                </apex:panelGrid>
+                <apex:panelGrid id="rl3">
+                    <apex:outputtext value="Object: {!rl2Obj}" rendered="{!showRl3}" style="font-weight : bold;"/>
+                    <apex:outputtext value="Available Fields: " rendered="{!showRl3}"/>
+                    <apex:selectList value="{!rl3}" size="12" id="f5" rendered="{!showRl3}" style="max-width: 200px;"> 
+                        <apex:selectOptions value="{!rl3List}" />
+                        <apex:actionSupport event="onchange" action="{!levelRL3}" rerender="rl4,ckEditorReplace" status="statLoad2"/>
+                    </apex:selectList>
+                </apex:panelGrid>
+                <apex:panelGrid id="rl4" >
+                    <apex:outputtext value="Object: {!rl3Obj}" rendered="{!showRl4}"  style="font-weight : bold;"/>
+                    <apex:outputtext value="Available Fields: " rendered="{!showRl4}"/>
+                    <apex:selectList value="{!rl4}" size="12" id="rl4sl" rendered="{!showRl4}" style="max-width: 200px;"> 
+                        <apex:selectOptions value="{!rl4List}" />
+                    </apex:selectList>
+                </apex:panelGrid>
+                <apex:panelGrid id="bt1">
+                    <br />
+                    <br />
+                    <apex:outputtext value="Add"/><br />
+                    <apex:commandButton action="{!add}" image="{!URLFOR($Resource.SDOC__SDoc,'right.gif')}" 
+                    style="border:none; padding:0px 0px 0px 0px;" rerender="p,op,fp,fp4,b2,ckEditorReplace" status="statLoad2"/><br />
+                    <apex:commandButton action="{!remove}" image="{!URLFOR($Resource.SDOC__SDoc,'left.gif')}" 
+                    style="border:none; padding:0px 0px 0px 0px;" rerender="p,op,fp,fp4,b2,ckEditorReplace" status="statLoad2"/><br />
+                    <apex:outputtext value="Remove"/><br />
+                    <br />
+                </apex:panelGrid>
+                <apex:panelGrid id="p">
+                    <apex:outputtext value="Selected Columns (left to right)" style="font-weight : bold;" /><br />
+                    <apex:selectList value="{!rld.rlf}" size="12" id="f6" style="width: 250px;" >
+                        <apex:selectOptions value="{!rlfList}" />
+                        <apex:actionSupport event="onchange" action="{!getcol}" rerender="fp,fp4,ckEditorReplace" status="statLoad2"/>
+                    </apex:selectList>
+                </apex:panelGrid>
+                <apex:panelGrid id="bt2">
+                    <br />
+                    <br />
+                    <apex:outputtext value="Move Up"/><br />
+                    <apex:commandButton action="{!moveup}" image="{!URLFOR($Resource.SDOC__SDoc,'up.gif')}" 
+                    style="border:none; padding:0px 0px 0px 0px;" rerender="p,op,fp,fp4,ckEditorReplace,b2,b3,b4" status="statLoad2"/><br />
+                    <apex:commandButton action="{!movedown}" image="{!URLFOR($Resource.SDOC__SDoc,'down.gif')}" 
+                    style="border:none; padding:0px 0px 0px 0px;" rerender="p,op,fp,fp4,ckEditorReplace,o,b2,b3,b4" status="statLoad2"/><br />
+                    <apex:outputtext value="Move Down"/><br />
+                </apex:panelGrid>                
+           </apex:pageblocksection>
+        </apex:pageBlock>
+        <apex:outputPanel id="b2">
+        <div style="text-align: center;" >
+          <apex:outputPanel rendered="{!NOT(isMSX)}">
+            <apex:commandButton value="Insert" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists" action="{!storeRLD}" onclick="insertLine('{!output}');" oncomplete="resetRelatedList();"  rendered="{!rlfList.size>0&& NOT(isMSX) && NOT(oldRLD)}"  styleClass="buttonStyle"  style="font-size:14px;" status="statLoad2"/>
+            <apex:commandButton value="Update" immediate="true" onclick="ckEditorReplace();" oncomplete="resetRelatedList();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad2" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists"
+            rendered="{!oldRLD && NOT(isMSX)}"/>
+            <apex:commandButton value="New" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists" 
+            action="{!resetRelatedList}" styleClass="buttonStyle" style="font-size:14px;" status="statLoad3"/>   
+            <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideLine();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad2"/>
+            <apex:actionFunction action="{!resetRelatedList}" name="resetRelatedList" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists"/>
+          </apex:outputPanel>
+        </div>
+        </apex:outputPanel>
+    </apex:form>
+    </div>
+
+</apex:tab>
+<apex:tab label="Format Data Columns" name="tab2" id="tabTwo">  
+<apex:form >
+    <apex:actionStatus id="statLoad3">
+        <apex:facet name="start">
+            <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+            </div>
+            <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+            <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+            border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+            border-right-color:#336699; background-color:#ffffff;">
+            <tr>
+            <td align="left" valign="top">
+            <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+            <tr>
+            <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+            <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+            <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+            &nbsp;Loading...</td>
+            </tr>
+            </table>
+            </td>
+            </tr>
+            </table>
+            </div>
+        </apex:facet>
+    </apex:actionStatus>
+    <apex:outputPanel id="fp">
+        <apex:pageBlock title="Choose a column to format">
+            <apex:pageBlockSection columns="2">
+                <apex:pageBlockSectionItem >
+                    <apex:selectList value="{!rld.rlf}" size="12" id="f7" style="width: 300px;" >
+                        <apex:selectOptions value="{!rlfList}" />
+                        <apex:actionSupport event="onchange" action="{!getcol}" rerender="cold,ckEditorReplace" status="statLoad3"/>
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                 <apex:pageBlockSectionItem >
+                 <apex:outputPanel id="cold">
+                    Insert related list without table markup: <apex:inputCheckbox value="{!rld.insertRelatedListWithoutTableMarkup}" /><br />&nbsp;<br />
+                    <apex:outputPanel rendered="{!NOT(isMSX)}">
+                      <apex:outputlabel for="c1" value="Header Text (Column Header): "/> 
+                      <apex:inputText id="c1" value="{!thisCol.header}" style="width:100%" disabled="{!thisCol.mergenext}"/> <br />
+                    </apex:outputPanel>
+                    <apex:outputlabel for="c6" value="Merge with Next Column and Display as Single Column: "/>
+                        <apex:inputCheckbox value="{!thisCol.mergenext}"/><br /><br />
+                    <apex:outputlabel for="c1a" value="Data Mapped To: "/> <apex:inputText disabled="true" id="c1a" value="{!thisCol.dataMapping}" style="width:100%"/> <br />
+                    <apex:outputlabel for="c1b" value="Data Contains Rich Text or HTML: "/><apex:inputCheckbox value="{!thisCol.rtffield}"/><br /><br />
+                    <apex:outputlabel for="c2" value="Prefix Text: "/> <apex:inputText id="c2" value="{!thisCol.prefix}" style="width:100%"/><br />
+                    <!--                 <apex:outputlabel for="c3" value="Prefix Text if Null: "/> <apex:inputText id="c3" value="{!thisCol.prefixifnull}" style="width:100%"/><br /> -->
+                    <apex:outputlabel for="c4" value="Postfix Text: "/> <apex:inputText id="c4" value="{!thisCol.postfix}" style="width:100%"/><br />
+                    <apex:outputlabel for="c5" value="Text to Display if Data is Null: "/> <apex:inputText id="c5" value="{!thisCol.postfixifnull}" style="width:100%"/><br />
+                    <apex:outputlabel for="c7" value="Start a New Row: "/><apex:inputCheckbox value="{!thisCol.newrow}"/><br /><br />
+                    <apex:outputlabel for="c8" value="Number of Columns to Span (colspan): "/> <apex:inputText id="c8" value="{!thisCol.colspan}" style="width:100%"/><br />
+                    <apex:outputlabel for="c9" value="Format Number (e.g. #,###.##): "/><apex:inputText id="c9" value="{!thisCol.formatnum}" style="width:100%"/><br />
+                    <apex:outputlabel for="c10" value="Format Date: (e.g. dd/MM/yyyy):"/><apex:inputText id="c10" value="{!thisCol.formatdate}" style="width:100%"/><br />
+                         <apex:actionSupport event="onchange" action="{!setcol}" rerender="cold,op,ckEditorReplace" status="statLoad3"/>
+                 </apex:outputPanel>
+                 </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            </apex:pageBlock>
+        <apex:outputPanel id="b3">
+            <div style="text-align: center;" >
+                <apex:outputPanel rendered="{!NOT(isMSX)}">
+                  <apex:commandButton value="Insert" rerender="p,selectList,ckEditorReplace" action="{!storeRLD}" oncomplete="insertLine('{!output}');"  rendered="{!rlfList.size>0 && NOT(oldRLD)}" styleClass="buttonStyle"  style="font-size:14px;" status="statLoad3"/>
+                  <apex:commandButton value="Update" immediate="true" oncomplete="ckEditorReplace();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad2"
+                  rendered="{!oldRLD && NOT(isMSX)}"/>
+                  <apex:commandButton value="Reset" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists,ckEditorReplace" 
+                  action="{!resetRelatedList}" styleClass="buttonStyle" style="font-size:14px;" status="statLoad3"/> 
+                  <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideLine();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad3"/>
+                </apex:outputPanel>
+            </div>
+        </apex:outputPanel>
+     </apex:outputPanel>
+    </apex:form>
+    
+</apex:tab>
+<apex:tab label="Filters and Sort Order" name="tab3" id="tabThree">
+<apex:form >
+    <apex:outputPanel id="wp">
+        <apex:pageBlock title="Filter Rows" mode="edit">
+            <apex:pageBlockSection columns="1">
+                <apex:pageBlockSectionItem >
+                    <apex:outputlabel for="where" value="Include a Filter/ SOQL WHERE clause (e.g. CreatedDate = THIS_YEAR)"/>
+                    <apex:inputText id="where" value="{!rld.whereclause}" style="width:100%;">
+                        <apex:actionSupport event="onchange" action="{!updateO}" rerender="op,ckEditorReplace" status="statLoad2"/>
+                    </apex:inputText>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputlabel for="limit" value="Maximum number of rows returned/ SOQL LIMIT (e.g. 20): "/>
+                    <apex:inputText id="limit" value="{!rld.limitclause}" style="width:100%;">
+                        <apex:actionSupport event="onchange" action="{!updateO}" rerender="op,ckEditorReplace" status="statLoad2"/>
+                    </apex:inputText>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputlabel for="orderby" value="Sort by column(s)/ SOQL ORDER BY clause (e.g. CreatedBy.name, CreatedDate Desc): "/>
+                    <apex:inputText id="orderby" value="{!rld.orderbyclause}" style="width:100%;">
+                        <apex:actionSupport event="onchange" action="{!updateO}" rerender="op,ckEditorReplace" status="statLoad2"/>
+                    </apex:inputText>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+
+        </apex:pageBlock>
+     </apex:outputPanel>
+    </apex:form>
+</apex:tab>
+<apex:tab label="Formatting & Styles" name="tab4" id="tabFour" rendered="{!NOT(isMSX)}">
+<apex:form >
+    <apex:actionStatus id="statLoad4">
+        <apex:facet name="start">
+            <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+            </div>
+            <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+            <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+            border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+            border-right-color:#336699; background-color:#ffffff;">
+            <tr>
+            <td align="left" valign="top">
+            <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+            <tr>
+            <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+            <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/></td>
+            <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+            &nbsp;Loading...</td>
+            </tr>
+            </table>
+            </td>
+            </tr>
+            </table>
+            </div>
+        </apex:facet>
+    </apex:actionStatus>
+    <apex:outputPanel id="fp4">
+        <apex:pageBlock title="Choose a column to change style">
+            <apex:pageBlockSection columns="2">
+                <apex:pageBlockSectionItem >
+                    <apex:selectList value="{!rld.rlf}" size="12" id="f74" style="width: 300px;" >
+                        <apex:selectOptions value="{!rlfList}" />
+                        <apex:actionSupport event="onchange" action="{!getcol}" rerender="cold4,ckEditorReplace" status="statLoad4"/> 
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                 <apex:pageBlockSectionItem >
+                 <apex:outputPanel id="cold4">
+                     <apex:outputlabel for="c4_1" value="font-family (e.g. times, courier, arial): "/> <apex:inputText id="c4_1" value="{!thisCol.cssff}" style="width:100%"/> <br />
+                     <apex:outputlabel for="c4_2" value="font-size (use points): "/> <apex:inputText id="c4_2" value="{!thisCol.cssfs}" style="width:100%"/> <br />
+                     <apex:outputlabel for="c4_3" value="font-weight (e.g. normal, bold, bolder): "/> <apex:inputText id="c4_3" value="{!thisCol.cssfw}" style="width:100%"/> <br />
+                     <apex:outputlabel for="c4_4" value="text-align (e.g. left, center, right): "/> <apex:inputText id="c4_4" value="{!thisCol.cssta}" style="width:100%"/> <br />
+                     <apex:outputlabel for="c4_5" value="width (if using %, all column widths should total 100%): "/> <apex:inputText id="c4_5" value="{!thisCol.csscw}" style="width:100%"/> <br />
+                     <apex:actionSupport event="onchange" action="{!setcol}" rerender="cold,op,ckEditorReplace" status="statLoad4"/>
+                 </apex:outputPanel>
+                 </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+        <apex:pageBlock title="Select table style">
+            <apex:pageBlockSection columns="1">
+                <apex:pageBlockSectionItem >
+                <apex:outputPanel id="ts">
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_6.png')}" rendered="{!rld.tableStyle='A6'}" 
+                                style="background-color:white; padding:10px; border:2px solid black;"/>
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_6.png')}" rendered="{!rld.tableStyle!='A6'}" style="cursor:pointer;" >
+                        <apex:actionSupport event="onclick" action="{!setStyle}" rerender="ts,op,ckEditorReplace" status="statLoad4">
+                            <apex:param name="s" value="A6"/>
+                        </apex:actionSupport>
+                    </apex:image>
+                    &nbsp;&nbsp;
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_1.png')}" rendered="{!rld.tableStyle='A1'}" 
+                                style="background-color:white; padding:10px; border:2px solid black;"/>
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_1.png')}" rendered="{!rld.tableStyle!='A1'}" style="cursor:pointer;" >
+                        <apex:actionSupport event="onclick" action="{!setStyle}" rerender="ts,op,ckEditorReplace" status="statLoad4">
+                            <apex:param name="s" value="A1"/>
+                        </apex:actionSupport>
+                    </apex:image>
+                    &nbsp;&nbsp;
+                    
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_2.png')}" rendered="{!rld.tableStyle='A2'}" 
+                                style="background-color:white; padding:10px; border:2px solid black;"/>
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_2.png')}" rendered="{!rld.tableStyle!='A2'}" style="cursor:pointer;" >
+                        <apex:actionSupport event="onclick" action="{!setStyle}" rerender="ts,op,ckEditorReplace" status="statLoad4">
+                            <apex:param name="s" value="A2"/>
+                        </apex:actionSupport>
+                    </apex:image>
+                    &nbsp;&nbsp;
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_3.png')}" rendered="{!rld.tableStyle='A3'}" 
+                                style="background-color:white; padding:10px; border:2px solid black;"/>
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_3.png')}" rendered="{!rld.tableStyle!='A3'}" style="cursor:pointer;" >
+                        <apex:actionSupport event="onclick" action="{!setStyle}" rerender="ts,op,ckEditorReplace" status="statLoad4">
+                            <apex:param name="s" value="A3"/>
+                        </apex:actionSupport>
+                    </apex:image>
+                    &nbsp;&nbsp;
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_4.png')}" rendered="{!rld.tableStyle='A4'}" 
+                                style="background-color:white; padding:10px; border:2px solid black;"/>
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_4.png')}" rendered="{!rld.tableStyle!='A4'}" style="cursor:pointer;" >
+                        <apex:actionSupport event="onclick" action="{!setStyle}" rerender="ts,op,ckEditorReplace" status="statLoad4">
+                            <apex:param name="s" value="A4"/>
+                        </apex:actionSupport>
+                    </apex:image>
+                    &nbsp;&nbsp;
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_5.png')}" rendered="{!rld.tableStyle='A5'}" 
+                                style="background-color:white; padding:10px; border:2px solid black;"/>
+                    <apex:image value="{!URLFOR($Resource.SDOC__SDoc,'Style_A_5.png')}" rendered="{!rld.tableStyle!='A5'}" style="cursor:pointer;" >
+                        <apex:actionSupport event="onclick" action="{!setStyle}" rerender="ts,op,ckEditorReplace" status="statLoad4">
+                            <apex:param name="s" value="A5"/>
+                        </apex:actionSupport>
+                    </apex:image>
+                    <br /><br />
+                </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>        
+        <apex:outputPanel id="b4">
+            <div style="text-align: center;" >
+                <apex:commandButton value="Insert" rerender="p,selectList" action="{!storeRLD}" oncomplete="insertLine('{!output}');"  rendered="{!rlfList.size>0 && NOT(oldRLD)}" styleClass="buttonStyle"  style="font-size:14px;" status="statLoad4"/> 
+                <apex:commandButton value="Update" immediate="true" oncomplete="ckEditorReplace();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad2"
+                rendered="{!oldRLD && NOT(isMSX)}"/>
+                <apex:commandButton value="Reset" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists,ckEditorReplace" 
+                action="{!resetRelatedList}" styleClass="buttonStyle" style="font-size:14px;" status="statLoad3"/> 
+                <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideLine();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad4"/>
+            </div>
+        </apex:outputPanel>
+     </apex:outputPanel>
+    </apex:form>    
+</apex:tab>
+<apex:tab label="{!relatedListTabFiveLabel}" name="tab5" id="tabFive">
+    <apex:form >
+    <apex:outputPanel id="op">
+        <apex:pageBlock title="Edit Source " mode="edit">
+            <apex:pageBlockSection columns="1">
+                <apex:pageBlockSectionItem >
+                   <apex:inputTextarea id="output" value="{!advancedRL}" style="width:100%; height:400px;"/>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+            <div style="text-align: center;" >
+                <apex:commandButton value="Copy to Clipboard" 
+                onclick="copyToClipboardRelatedList();" rerender="output" rendered="{!rlfList.size>0 && isMSX}" styleClass="buttonStyleCopyToClipboard"  style="font-size:14px;" status="statLoad3"/> 
+                <apex:commandButton value="Insert" rerender="p,selectList" action="{!setAdvanced}" oncomplete="insertLine('{!advancedRL}');"  rendered="{!rlfList.size>0 && NOT(isMSX) && NOT(oldRLD)}"  styleClass="buttonStyle"  style="font-size:14px;" status="statLoad2"/>
+                <apex:commandButton value="Update" immediate="true" oncomplete="ckEditorReplace();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad2"
+                rendered="{!oldRLD && NOT(isMSX)}"/>
+                <apex:commandButton value="Reset" rerender="directDiv,selectobjects,selectrelated,block5,b2,fp,b3,wp,fp4,op,pastRelatedLists" 
+                action="{!resetRelatedList}" styleClass="buttonStyle" style="font-size:14px;" status="statLoad3"/>   
+                <apex:commandButton value="Cancel" immediate="true" oncomplete="YAHOO.force.com.hideLine();" style="font-size:14px;" styleClass="buttonStyle" status="statLoad2"/>
+                <div class="clipboard_msg clipboard_msg_rl"></div>
+            </div>
+    </apex:outputPanel>
+    </apex:form>
+</apex:tab>
+</apex:tabPanel>
+</div>
+
+
+    <apex:form >
+    <apex:pageMessages id="mainPageMessage"/>    
+    <apex:outputText escape="false" rendered="{!NOT(ISNULL(SDOC__SDTemplate__c.SDOC__Master_Template__c))}">
+        <span style="font-weight:bold; font-size:12pt; color:red; text-align:center"> 
+            You cannot edit this template because it is an archived version that is READ-ONLY.<br/>
+            If you want to restore this version, open the 
+            <a href ="/{!SDTemplate__c.master_template__c}">CURRENT VERSION</a>
+            of this template, and then click on the restore link from the Version History list.
+        </span>
+    </apex:outputText>
+    <apex:pageBlock title="Edit Template: {!SDOC__SDTemplate__c.name}" id="editBlock" mode="edit">
+        <apex:outputText value="Field for edit:" rendered="false"/>    
+        <apex:selectList value="{!fieldForEdit}" size="1" id="f3" rendered="false"> 
+            <apex:selectOptions value="{!templateFields}" />
+            <apex:actionSupport event="onchange" action="{!swapEditor}"></apex:actionSupport>
+        </apex:selectList>
+        <apex:pageBlockButtons >
+            <apex:commandButton value="Save" action="{!save}" rendered="{!ISNULL(SDOC__SDTemplate__c.SDOC__Master_Template__c)}"/>
+            <apex:commandButton value="Save & Close" action="{!saveAndClose}" 
+            rendered="{!ISNULL(SDOC__SDTemplate__c.SDOC__Master_Template__c)}"/>
+            <apex:commandButton value="Cancel" action="{!cancel}"/>
+            <apex:commandButton value="Insert Field" oncomplete="YAHOO.force.com.showMe();" 
+            rendered="{!ISNULL(SDOC__SDTemplate__c.SDOC__Master_Template__c)}"/>
+            <apex:commandButton value="Insert Related List" oncomplete="YAHOO.force.com.showLine();"
+            rendered="{!AND( ISNULL(SDTemplate__c.Master_Template__c), showInsertRelatedListButton) }"/>
+            <apex:commandButton value="Insert RENDER" oncomplete="YAHOO.force.com.showRender();"
+            rendered="{!AND( ISNULL(SDOC__SDTemplate__c.SDOC__Master_Template__c))}"/>
+            <apex:outputPanel id="generatePreviewContainer">
+              <apex:commandButton id="generatePreview" value="Save & Preview" action="{!save}"
+              onclick="window.open('{!previewURL}');" rendered="{!NOT(disablePreview)}"/>
+            </apex:outputPanel>
+       </apex:pageBlockButtons>
+<apex:tabPanel switchType="client" selectedTab="name1" id="mainTabPanel" 
+styleClass="theTabPanel" tabClass="theTabPanel" contentClass="tabContent" 
+activeTabClass="activeTab" inactiveTabClass="inactiveTab" width="100%">
+
+<apex:tab label="Upload New {!SDOC__SDTemplate__c.SDOC__Template_Format__c} Template" name="tabDocx" id="mtabDocx" rendered="{!showtabDocx}">
+  <apex:iframe src="/apex/SDFileUpload?isDocxUpload=true&docxTemplateId={!Id}" rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOCX'}" />
+  <apex:iframe src="/apex/SDFileUpload?isDocxUpload=true&docxTemplateId={!Id}&msxFiletype=PPTX" rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='PPTX'}" />
+</apex:tab>
+
+<apex:tab label="{!tabOneName}" name="tab1" id="mtab1" rendered="{!showtab[1]}">
+
+        <apex:pageBlockSection columns="1" rendered="{!whichEditor=='1'}">
+                <apex:pageBlockSectionItem >
+                   <apex:inputTextarea id="editor1" value="{!TemplateXML}" styleClass="ckeditor1" />
+                </apex:pageBlockSectionItem>
+        </apex:pageBlockSection>
+</apex:tab>
+
+<apex:tab label="Header" name="tab2" id="mtab2" rendered="{!showtab[2]}">
+            <apex:pageBlockSection title="Header on First Page" columns="1" id="hofp">
+                <script>twistSection(document.getElementById("{!$Component.hofp}").childNodes[0].childNodes[0]); </script>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_FPHeader_BackGrndImgUrl__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_FPHeader_BackGrndImgStyle__c}" rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_FPHeader_Content__c}" rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>        
+               <apex:pageBlockSectionItem >
+                   <apex:inputTextarea id="editor2" value="{!header}" styleClass="ckeditor1" />
+                </apex:pageBlockSectionItem>                        
+            </apex:pageBlockSection>
+            <apex:pageBlockSection title="Header on Remaining Pages" columns="1" id="horp">
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__HeaderSame__c}"/>
+             <script>twistSection(document.getElementById("{!$Component.horp}").childNodes[0].childNodes[0]); </script>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_SPHeader_BackGrndImgUrl__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}" />
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_SPHeader_BackGrndImgStyle__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_SPHeader_Content__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:pageBlockSectionItem >
+                   <apex:inputTextarea id="editor3" value="{!header2}" styleClass="ckeditor1" />
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+</apex:tab>
+<apex:tab label="Footer" name="tab3" id="mtab3" rendered="{!showtab[3]}">
+             <apex:pageBlockSection title="Footer on First Page" columns="1" id="fofp">
+             <script>twistSection(document.getElementById("{!$Component.fofp}").childNodes[0].childNodes[0]); </script>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_FPFooter_BackGrndImgUrl__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}" />
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_FPFooter_BackGrndImgStyle__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_FPFooter_Content__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:pageBlockSectionItem >
+                   <apex:inputTextarea id="editor4" value="{!footer}" styleClass="ckeditor1" />
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection title="Footer on Remaining Pages" columns="1" id="forp">
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__FooterSame__c}"/>
+             <script>twistSection(document.getElementById("{!$Component.forp}").childNodes[0].childNodes[0]); </script>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_SPFooter_BackGrndImgUrl__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}" />
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_SPFooter_BackGrndImgStyle__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_SPFooter_Content__c}"  rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                <apex:pageBlockSectionItem >
+                   <apex:inputTextarea id="editor5" value="{!footer2}" styleClass="ckeditor1" />
+                </apex:pageBlockSectionItem>                
+            </apex:pageBlockSection>
+
+</apex:tab>
+<apex:tab label="Page Settings" name="tab4" id="mtab4" rendered="{!showtab[4]}">
+                <apex:pageBlockSection title="Page Properties" columns="2">
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Embed_Images__c}" rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}"/>
+                    <apex:outputlabel value="" rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c!='DOC'}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Page_Margin_Left__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Unit_of_Measure__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Page_Margin_Right__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Page_Width__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Page_Header_Margin__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Page_Height__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MS_Page_Footer_Margin__c}"/>
+                </apex:pageBlockSection>
+
+</apex:tab>    
+<apex:tab label="Document Options" name="tab5" id="mtab5" rendered="{!showtab[5]}">
+                    <apex:pageBlockSection title="Attachment & File Options"  columns="2" >
+                      <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Auto Create Salesforce File and link to record"/>
+                                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Create_File__c}">
+                                  <apex:actionSupport event="onclick" reRender="createNewCheckbox" action="{!checkCreateNewAttachment}"/>
+                                </apex:inputField>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+
+                        <apex:pageBlockSectionItem >
+                            <apex:outputLabel value="Auto Create Salesforce Attachment and link to record"/>
+                              <apex:inputCheckbox value="{!SDOC__SDTemplate__c.SDOC__Create_Attachment__c}">
+                                <apex:actionSupport event="onclick" reRender="createNewCheckbox" action="{!checkCreateNewAttachment}"/>
+                              </apex:inputCheckbox>
+                        </apex:pageBlockSectionItem>
+
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+
+                        <apex:pageBlockSectionItem id="createNewAttachmentCheckbox" >
+                            <apex:outputLabel value="Create New Attachment with Each Edit"/>
+                                <apex:inputCheckbox id="createNewCheckbox" value="{!SDOC__SDTemplate__c.SDOC__Allow_Create_New_Attachment__c}" disabled="{!(SDOC__SDTemplate__c.SDOC__Allow_Edit__c == false || (SDOC__SDTemplate__c.SDOC__Create_Attachment__c == false && SDOC__SDTemplate__c.SDOC__Create_File__c == false))}" />  
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+                    <apex:pageBlockSectionItem >
+                        <div class="ft" style="font-size: 12px;">
+                                <br></br>
+                                <center>You can use the field below to override the default Attachment and File naming format  (eg SD-0001)</center> 
+                                <br></br><b>Note 1:</b> You can mix merged fields from your base object with static text:
+                                <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>Proposal For &#123;!Opportunity.Account.Name}</i></span>
+                                <br></br><b>Note 2:</b> Do Not include the extension (.doc, .pdf etc) in the attachment format below, it will be added automatically when generated
+                                <br></br><b>Note 3:</b> You can include the following special fields as needed :&#123;!DocumentID} and &#123;!DocumentName}
+                                <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Where <i>&#123;!DocumentID}</i> is the orginal name (eg SD-0001) and <i>&#123;!DocumentName}</i> is the template name used</span>
+                                <br></br><b>Note 4:</b> If you cannot achieve the desired attachment name below, you can leverage a formula field to dynamically generate the attachment format.
+                                <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>&#123;!opportunity.sdoc_attachment_name__c}</i> where sdoc_attachment_name is an example of a formula field you create</span>
+                        </div>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >                             
+                    </apex:pageBlockSectionItem>                    
+                   
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="an" value="Output file (Attachment Name) Format:"/>
+                                <apex:inputField id="an" value="{!SDOC__SDTemplate__c.SDOC__Create_Attachment_Name__c}"/>                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                        <div class="ft" style="font-size: 12px;">
+                                <br></br><br></br>By default, any file that is generated in the 'Notes and Attachments' related list
+                                <br/>is automatically deleted when the S-Docs record that created it is deleted. This is a clean up measure.
+                                <br></br>You can uncheck below if you want to preserve all attachments regardless of linked record deletes.
+                       </div>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>                     
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="ad" value="Delete Related Attachment upon S-Doc delete:"/>
+                                <apex:inputField id="ad" value="{!SDOC__SDTemplate__c.SDOC__Remove_Attachment_On_Delete__c}"/>
+                    </apex:pageBlockSectionItem> 
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem> 
+
+                    <apex:pageBlockSectionItem ></apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem ></apex:pageBlockSectionItem>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_ReturnToRecord__c}"/>
+                    <apex:pageBlockSectionItem ></apex:pageBlockSectionItem>
+
+                    </apex:pageBlockSection>
+
+                    <apex:pageBlockSection title="Mass Merge Options"  columns="2" >
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm1" value="When using this template in mass merge, only create a single summary doc"/>
+                                <apex:inputField id="mm1" value="{!SDOC__SDTemplate__c.SDOC__Mass_Merge_Summary_Document__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm2" value="When using this template in mass merge, immediately clear jobs:"/>
+                                <apex:inputField id="mm2" value="{!SDOC__SDTemplate__c.SDOC__Mass_Merge_Clear_Jobs__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm3" value="When using this template in a mass merge, do NOT keep an archive of the consolidated single doc:"/>
+                                <apex:inputField id="mm3" value="{!SDOC__SDTemplate__c.SDOC__Dont_Save_Mass_Merge_Docs__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm4" value="When using this template in mass merge, include a page break after every N documents (specify N here):"/>
+                                <apex:inputField id="mm4" value="{!SDOC__SDTemplate__c.SDOC__Mass_Merge_Page_Break_Every_N_Docs__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm5" value="When using this template in mass merge, do NOT include a page-break between each document:"/>
+                                <apex:inputField id="mm5" value="{!SDOC__SDTemplate__c.SDOC__Mass_Merge_Exclude_Page_Breaks__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm6" value="When using this template in mass merge, allow user to email single consolidated document:"/>
+                                <apex:inputField id="mm6" value="{!SDOC__SDTemplate__c.SDOC__Mass_Merge_Allow_Email__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="mm7" value="When using this template in mass merge, sort the docs in the consolidated single doc by this field:"/>
+                                <apex:inputField id="mm7" value="{!SDOC__SDTemplate__c.SDOC__Mass_Merge_Sort_Field__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+                    </apex:pageBlockSection>
+                    
+                    <apex:pageBlockSection title="Other Options"  columns="2" >
+                    <apex:pageBlockSectionItem rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='PDF' || SDOC__SDTemplate__c.SDOC__Template_Format__c=='XLS'|| SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}">
+                                <apex:outputLabel for="uc" value="Template contains international characters (Unicode fonts)"/>
+                                <apex:inputField id="uc" value="{!SDOC__SDTemplate__c.SDOC__PDF_Unicode__c}"/>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='PDF' || SDOC__SDTemplate__c.SDOC__Template_Format__c=='XLS'|| SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}">                        
+                    </apex:pageBlockSectionItem>                               
+                    <apex:pageBlockSectionItem rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='PDF' || SDOC__SDTemplate__c.SDOC__Template_Format__c=='XLS'|| SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}">
+                                <apex:outputLabel for="uc" value="Unicode Enforcement Level"/>
+                                <apex:inputField id="uc" value="{!SDOC__SDTemplate__c.SDOC__Unicode_Level__c}"/>                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!SDOC__SDTemplate__c.SDOC__Template_Format__c=='PDF' || SDOC__SDTemplate__c.SDOC__Template_Format__c=='XLS'|| SDOC__SDTemplate__c.SDOC__Template_Format__c=='DOC'}">
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="aa" value="Auto Attach related case articles to outbound email:"/>
+                                <apex:inputField id="aa" value="{!SDOC__SDTemplate__c.SDOC__InclArticles__c}"/>                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+                    
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="aa" value="Show all warning messages during document generation:"/>
+                                <apex:inputField id="aa" value="{!SDOC__SDTemplate__c.SDOC__Show_Warning_Messages__c}"/>                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem >
+                                <apex:outputLabel for="savedd" value="Save Document Data to S-Doc Record"/>
+                                <apex:inputField id="savedd" value="{!SDOC__SDTemplate__c.SDOC__Save_Data__c}"/>                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem rendered="{!isMSX}">
+                                <apex:outputLabel value="Rich Text Image Dimensions:" />
+                                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__MSX_Rich_Text_Image_Dimensions__c}" style="width: 200px;" />                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!isMSX}">
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem rendered="{!NOT(isMSX)}">
+                                <apex:outputLabel for="vh" value="Version History: Maximum Records Retained in Archive"/>
+                                <apex:inputField id="vh" value="{!SDOC__SDTemplate__c.SDOC__Version_History_Keep_Limit__c}"/>                              
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem rendered="{!NOT(isMSX)}">
+                    </apex:pageBlockSectionItem>
+
+                    </apex:pageBlockSection>
+</apex:tab>                    
+<apex:tab label="Email Settings" name="tab6" id="mtab6" rendered="{!showtab[6]}">
+<apex:pageBlockSection title="Email Settings" columns="2">
+                   <apex:pageBlockSectionItem >
+                    <div class="ft" style="font-size: 12px;">
+                            The fields below can be used to control the behavior and defaults when this template is emailed.
+                             <br /><br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Note, to set the body of the outbound email, you must create an S-Docs template where the "Template Format" field is set to HTML. 
+                            That HTML template, when included along with other generated S-Docs, will automatically be substituted as the body of the outbound email message. <br />
+                            This gives you far greater control and flexibility to create your email message and attachments.
+                            <br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;To help avoid conflicts when a user generates a set of templates having different email
+                             defaults, we recommend setting the fields below only on the "HTML" version of your S-Docs templates.
+                    </div>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+                    
+                    <apex:pageBlockSectionItem >
+                    <div class="ft" style="font-size: 12px;">
+                           <center><b>Email Subject</b></center>
+                            <br/>
+                            For the subject line, you may enter a static value or use dynamic fields. <br />
+                            <br></br><b>Example 1:</b> If your base object was Opportunity, you could set the default subject to: 
+                            <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i> Your quote request for &#123;!Opportunity.Name} is attached.</i></span>
+                            <br></br><b>Example 2:</b> If your base object was MyCustObj__c,, you could set the default subject to: 
+                            <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>Important Information Re Acct#:  &#123;!MyCustObj__c.Account__r.AccountNumber}</i></span>
+                            
+                    </div>
+                    </apex:pageBlockSectionItem>
+                    <apex:pageBlockSectionItem >
+                    <div class="ft" style="font-size: 12px;">
+                            Locking fields will prevent users from changing the value to anything other than the default value defined in the left column. If the default value is left blank
+                            and you lock the field, the entire field and label will be hidden, and therefore cannot be set by the user. If you leave the "Send To" field blank
+                            and you check "Lock Send To Address", the user will be blocked from emailing this document. If a user is generating multiple documents with different locking restrictions,
+                            the most restrictive settings are applied to the document set generated.
+                    </div>
+                    </apex:pageBlockSectionItem>
+                    
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Subject__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Lock_Subject__c}"/>
+                    <apex:pageBlockSectionItem >
+                    <div class="ft" style="font-size: 12px;">
+                            <center><b>Email Recipients</b></center>
+                            <br></br><b>Example 1:</b> For a template Related To an Account, where you want to automatically bcc the account owner and your compliance team, you can set bbc to:
+                            <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &#123;!Account.owner.email}, compliance@mycompany.com</span>
+                            <br></br><b>Example 2:</b> For a template Related To a custom object named MyCustObj__c, you could default the 'Email Send To': 
+                            <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &#123;!MyCustObj__c.MainContact__r.email}, &#123;!MyCustObj__c.SecondContact__r.email}</span>
+                            <br></br><b>Note: </b>Be sure that all dynamic fields values resolve to a valid email address format and multiple values are separated with a comma(,)
+                    </div>
+                    </apex:pageBlockSectionItem>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Lock_Body__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_SendTo__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Lock_SendTo__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_cc__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Lock_cc__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_bcc__c}"/>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Lock_bcc__c}"/>
+                   <apex:pageBlockSectionItem helpText="If you have any Organization-Wide Email Addresses defined, they will appear in this list as well, and you can then change the default FROM address from 'Logged in User' (i.e. the FROM address of the user sending the email) to one of your Organization-Wide Email Addresses. No other email addresses will appear in this list. Additionally, there is a checkbox to the right that you can check if you'd like to allow the user to change an email's FROM address to one of the other email addresses that appear in this list.">
+                    <apex:outputLabel value="Set the default FROM Address" for="owa"/>
+                    <apex:selectList value="{!SDOC__SDTemplate__c.SDOC__Email_From_OrgWideAddressId__c}" size="1" id="owa">
+                            <apex:selectOptions value="{!orgwideids}"/>
+                   </apex:selectList>
+                   </apex:pageBlockSectionItem>
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_From_User_Override__c}"/>
+
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_Restricted_Domains__c}"/>
+
+                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_From_OrgWideAddress_Only__c}"/>
+
+                    <apex:pageBlockSectionItem >
+                    </apex:pageBlockSectionItem>
+
+                    <apex:pageBlockSectionItem helpText="{!emailFromConditionalUserSigHelpText}">
+                      <apex:outputLabel value="Email FROM: Use User Signature if FROM address is 'Logged In User'" for="owa"/>
+                      <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Email_From_Use_Signature_If_User_Email__c}"/>
+                    </apex:pageBlockSectionItem>
+                    
+                </apex:pageBlockSection> 
+</apex:tab>                    
+<apex:tab label="Auto Create Task" name="tab7" id="mtab7" rendered="{!showtab[7]}">                  
+                    
+                    <apex:pageBlockSection title="Task Settings: Auto generate a task upon document generation"  columns="2" >                        
+                        <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Enable Task Creation Feature"/>
+                                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Auto_Create__c}"/>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Default behavior for creating a Task when this template is selected."/>
+                                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Auto_Create_Default__c}"/>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem>
+                                                
+                        <apex:pageBlockSectionItem >
+                                <apex:outputLabel value="Prompt user to review Task Details during document generation."/>
+                                <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Details_Override__c}"/>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem>
+
+                    </apex:pageBlockSection>
+                    <apex:pageBlockSection title="Task Details: Default Task values"  columns="2" >
+                        <apex:pageBlockSectionItem >
+                            <div class="ft" style="font-size: 12px;">
+                                <center><b>Task Subject</b></center> 
+                                <br></br><b>Note 1:</b> If left blank, the Task Subject will default to "S-Doc Generated:" + the name of this template.
+                                <br></br><b>Note 2:</b> You can mix merged fields starting from your base object along with static text: 
+                                <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>Callback for &#123;!Contact.Name}</i></span>
+                                <br></br><b>Note 3:</b> The following special fields are available if needed :&#123;!DocumentID} and &#123;!DocumentName}
+                                <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Where <i>&#123;!DocumentID}</i> is the orginal name (eg SD-0001) and <i>&#123;!DocumentName}</i> is the name field of this template</span>
+                                <br></br><b>Note 4:</b> If you cannot achieve the desired attachment name below, you can leverage a formula field to dynamically set the task subject field.
+                                <br></br><span style="font-size: 11px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <i>&#123;!opportunity.sdoc_task_subject_default__c}</i> where sdoc_task_subject_default__c is an example of a formula field you create</span>
+                            </div>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+
+                        <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Task Subject:"/>
+                                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Subject__c}"/>
+                        </apex:pageBlockSectionItem>  
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+
+
+
+                        <apex:pageBlockSectionItem >
+                            <div class="ft" style="font-size: 12px;">
+                                <center><b>Task Status</b></center>
+                                <br></br><b>Note 1:</b> If left blank, the status will default to "Completed", and therefore go directly to "Activity History" instead of "Open Activities"
+                                <br></br><b>Note 2:</b> You can mix merged fields from your base object with static text to set the task status field: 
+                            </div>
+                        </apex:pageBlockSectionItem> 
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+
+                        <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Task Status: "/>
+                                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Status__c}"/>
+                        </apex:pageBlockSectionItem>  
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem> 
+
+                        
+                        
+                        <apex:pageBlockSectionItem >
+                            <div class="ft" style="font-size: 12px;">
+                                <center><b>Task Activity Date</b></center> 
+                                <br></br><b>Note 1:</b> If left blank, the days to add will default to 0. Therefore the due date will default to today (i.e. the task due date will be same as document generation date)
+                                <br></br><b>Note 2:</b> By checking the "Count Business Days Only", the task due date will ignore weekend days when counting. It will not ignore holidays.
+                            </div>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                        </apex:pageBlockSectionItem>
+                        
+                        <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Task Due Date - Days to add:"/>
+                                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Due_Add_Days__c}"/>
+                        </apex:pageBlockSectionItem>
+                        <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Task Due Date - Count Business Days Only:"/>
+                                    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__Task_Due_Add_Business_Only__c}"/>
+                        </apex:pageBlockSectionItem>                                 
+
+                    </apex:pageBlockSection>
+</apex:tab>                    
+
+<!-- ================================ Start User Choice Feature ================================ -->
+<apex:tab label="Runtime Prompts" name="tab8" id="mtab8" rendered="{!showtab[8]}">
+<apex:outputPanel id="user-choices-section">
+    <apex:actionStatus id="statLoad3">
+      <apex:facet name="start">
+        <div id="blur" style="position:absolute; left:1px; top:1px; width:100%; height:100%; text-align:center; vertical-align: middle; background-color: #dcdcdc; opacity:0.7;filter:alpha(opacity=70)">
+        </div>
+        <div id="StatusBox" style="position:absolute; left:50%; top:200px; width: 120px; height:50px; opacity:1;filter:alpha(opacity=100)">
+          <table border="1" cellpadding="0" cellspacing="0" style="border-left-color: #336699;
+            border-bottom-color: #336699; width: 120px; border-top-color: #336699; height:50px;
+            border-right-color:#336699; background-color:#ffffff;">
+            <tr>
+              <td align="left" valign="top">
+                <table border="0" cellpadding="4" cellspacing="0" style="width: 100%; height: 100%">
+                  <tr>
+                    <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;">
+                      <img src="{!URLFOR($Resource.SDoc,'spinner_large.gif')}"/>
+                    </td>
+                    <td style="border-bottom-color:#336699; border-bottom-width:0px; border-bottom-style:solid;vertical-align:middle;color:darkred;font-size:11pt;font-weight:bold;">
+                      &nbsp;Loading...
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </apex:facet>
+    </apex:actionStatus>
+    <br />
+    <div>
+      This feature will pause document generation and prompt the user for input. 
+      The captured user input will then be merged into the final document. For more details, click 
+      <a href="http://www.sdocs.com/documentation/merge-user-input-with-documents-at-runtime/" target="_blank">
+        here.
+      </a>
+    </div>
+    <br />
+    <br />
+
+    <apex:actionFunction name="removeThisUserChoice"
+    action="{!ucUserChoices.removeSpecifiedUserChoice}"
+    reRender="user-choices-section" status="statLoad3"
+    oncomplete="addCkEditorToUserChoices();">
+      <apex:param value="" name="paramOne"
+      assignTo="{!ucUserChoices.ucNumberOfSpecifiedUserChoice}" />
+    </apex:actionFunction>
+
+    <apex:actionFunction name="moveThisUserChoiceUp"
+    action="{!ucUserChoices.moveSpecifiedUserChoiceUp}"
+    reRender="user-choices-section" status="statLoad3"
+    oncomplete="addCkEditorToUserChoices();">
+      <apex:param value="" name="paramOne"
+      assignTo="{!ucUserChoices.ucNumberOfSpecifiedUserChoice}" />
+    </apex:actionFunction>
+
+    <apex:actionFunction name="moveThisUserChoiceDown"
+    action="{!ucUserChoices.moveSpecifiedUserChoiceDown}"
+    reRender="user-choices-section" status="statLoad3"
+    oncomplete="addCkEditorToUserChoices();">
+      <apex:param value="" name="paramOne"
+      assignTo="{!ucUserChoices.ucNumberOfSpecifiedUserChoice}" />
+    </apex:actionFunction>
+
+    <style type="text/css">
+      .move-prompt-btn {
+        background: none;
+        border: none;
+        padding: 0px;
+        margin: 0px;
+      }
+    </style>
+
+    <apex:pageBlockTable value="{!ucUserChoices.ucChoices}" var="userChoice">
+      <apex:column >
+        <apex:pageBlockSection title="Prompt {!userChoice.ucNumber + 1}" columns="1">
+
+            <apex:pageBlockSectionItem >
+              <apex:outputPanel >
+
+                <!-- Remove this UserChoice -->
+                <apex:outputPanel rendered="{!ucUserChoices.ucNumUserChoices > ucUserChoices.MIN_NUM_USER_CHOICES}"
+                style="padding-top:3px;">
+                  <button type='button'
+                  class="move-prompt-btn"
+                  onclick="saveCkEditorInputs();
+                  if (confirm('Are you sure you want to delete Prompt {!userChoice.ucNumber + 1}?')) {
+                    removeThisUserChoice('{!userChoice.ucNumber}');
+                  }">
+                    <img src="{!URLFOR($Resource.SDoc,'x.gif')}" />
+                  </button>
+                </apex:outputPanel>
+
+                <!-- Move this UserChoice Up -->
+                <apex:outputPanel rendered="{!userChoice.ucNumber > 0}">
+                  <button type='button'
+                  class="move-prompt-btn"
+                  onclick="saveCkEditorInputs(); moveThisUserChoiceUp('{!userChoice.ucNumber}');">
+                    <img src="{!URLFOR($Resource.SDOC__SDoc,'up.gif')}" />
+                  </button>
+                </apex:outputPanel>
+
+                <!-- Move this UserChoice Down -->
+                <apex:outputPanel rendered="{!userChoice.ucNumber < ucUserChoices.ucNumUserChoices - 1}">
+                  <button type='button'
+                  class="move-prompt-btn"
+                  onclick="saveCkEditorInputs(); moveThisUserChoiceDown('{!userChoice.ucNumber}');">
+                    <img src="{!URLFOR($Resource.SDOC__SDoc,'down.gif')}" />
+                  </button>
+                </apex:outputPanel>
+
+              </apex:outputPanel>
+            </apex:pageBlockSectionItem>
+
+            <apex:outputText value="Type:" />
+            <apex:selectList value="{!userChoice.ucChoiceType}" multiselect="false" size="1">
+              <apex:selectOptions value="{!userChoice.ucChoiceTypes}"/>
+              <apex:actionSupport action="{!doNothing}" event="onchange" 
+              reRender="user-choices-section" status="statLoad3"
+              onsubmit="saveCkEditorInputs();"
+              oncomplete="addCkEditorToUserChoices();" />
+            </apex:selectList>
+            <br />
+
+            <apex:outputText value="Merge field name:" />
+            <apex:inputText value="{!userChoice.ucMergeFieldName}">
+                <apex:actionSupport action="{!userChoice.formatMergeFieldName}" event="onchange" 
+                reRender="user-choices-section,insert-field-tab-panel" status="statLoad3" 
+                onsubmit="saveCkEditorInputs();"
+                oncomplete="addCkEditorToUserChoices();" />
+            </apex:inputText>
+            <apex:outputPanel rendered="{!userChoice.ucMergeFieldName != ''}" style="color:#6C7A89;">
+              You can now use the following merge field in your template: &#123;&#123;&#33;
+              <apex:outputText value="{!userChoice.ucMergeFieldName}"
+               escape="false"  />&#125;&#125;
+            </apex:outputPanel>
+            <br />
+
+            <apex:outputText value="Please enter a prompt:" />
+            <apex:inputTextarea value="{!userChoice.ucPrompt}" />
+            <br />
+
+            <apex:outputText value="Show this prompt only if the following conditions are true (optional):" />
+            <apex:inputTextarea value="{!userChoice.ucRendered}" />
+            <br />
+
+            <!-- Start UserChoiceInput -->
+            <apex:outputPanel styleClass="required-checkbox"
+            rendered="{!userChoice.ucChoiceType == userChoice.INPUT_TEXT || userChoice.ucChoiceType == userChoice.INPUT_DATE}">
+                <apex:outputText value="Required (leave unchecked if providing a default value): " />
+                <apex:inputCheckbox value="{!userChoice.required}" />
+
+                <br />
+
+                <apex:outputText value="Allow user to create new lines: " />
+                <apex:inputCheckbox value="{!userChoice.ucInput.isTextArea}" />
+
+                <!--<apex:outputText value="Required: " rendered="{!NOT(userChoice.ucInput.disableRequiredCheckbox)}" />
+                <apex:outputText value="Required (disabled since a default value was provided): "
+                rendered="{!userChoice.ucInput.disableRequiredCheckbox}" />
+                <apex:inputCheckbox value="{!userChoice.ucInput.required}" disabled="{!userChoice.ucInput.disableRequiredCheckbox}" />-->
+            </apex:outputPanel>
+            <!-- End UserChoiceInput -->
+
+            <!-- Start UserChoiceCheckboxes -->
+            <apex:outputPanel rendered="{!userChoice.ucChoiceType == userChoice.CHECKBOX_CHOICE}">
+
+                <apex:outputText value="Delimiter (optional): " />
+                <apex:inputText value="{!userChoice.ucUserChoiceCheckboxes.checkboxChoiceDelimiter}"/>
+                <br />
+                <br />
+
+                <apex:outputText value="Minimum number of options that can be selected: " />
+                <apex:inputText value="{!userChoice.ucUserChoiceCheckboxes.minNumSelections}"/>
+                <br />
+                <br />
+
+                <apex:outputText value="Maximum number of options that can be selected: " />
+                <apex:inputText value="{!userChoice.ucUserChoiceCheckboxes.maxNumSelections}"/>
+                <br />
+                <br />
+                <br />
+
+                <apex:pageBlockTable var="userChoiceCheckbox" 
+                value="{!userChoice.ucUserChoiceCheckboxes.ucCheckboxes}">
+                  <apex:column headerValue="Please provide choices for the user to select from:">
+                    <br />
+                    <apex:outputPanel rendered="{!userChoice.ucUserChoiceCheckboxes.ucNumCheckboxChoices > userChoiceCheckbox.uccNumber}">
+                      <apex:outputText value="Option {!userChoiceCheckbox.uccNumber + 1}:" />
+                      <!--<apex:outputText value="Use Rich Text Editor: " />
+                      <apex:inputCheckbox styleClass="rtf-cb-{!userChoice.ucNumber}-{!userChoiceCheckbox.uccNumber}"
+                      value="{!userChoiceCheckbox.useRichTextEditor}"
+                      onclick="addCkEditorToUserChoices();">
+                        <apex:actionSupport action="{!doNothing}" event="onclick" 
+                        reRender="user-choices-section" status="statLoad3" />
+                      </apex:inputCheckbox>
+                      <apex:inputTextarea value="{!userChoiceCheckbox.outputText}" 
+                      styleClass="ckeditor-user-choices-{!userChoice.ucNumber}-{!userChoiceCheckbox.uccNumber}" />-->
+                      <apex:inputTextarea value="{!userChoiceCheckbox.outputText}" 
+                      styleClass="ckeditor-user-choices" />
+                    </apex:outputPanel>
+                  </apex:column>
+                </apex:pageBlockTable> 
+
+                <!-- Add another UserCheckboxChoice text area -->
+                <apex:commandButton value="Add Another Option" action="{!userChoice.ucUserChoiceCheckboxes.addCheckboxChoice}" 
+                rendered="{!userChoice.ucUserChoiceCheckboxes.ucNumCheckboxChoices < userChoice.ucUserChoiceCheckboxes.MAX_NUM_CHECKBOX_CHOICES}"
+                reRender="user-choices-section" status="statLoad3"
+                onclick="saveCkEditorInputs();" oncomplete="addCkEditorToUserChoices();" />
+
+                <!-- Remove the last UserCheckboxChoice text area -->
+                <apex:commandButton value="Remove Last Option" action="{!userChoice.ucUserChoiceCheckboxes.removeCheckboxChoice}" 
+                rendered="{!userChoice.ucUserChoiceCheckboxes.ucNumCheckboxChoices > userChoice.ucUserChoiceCheckboxes.MIN_NUM_CHECKBOX_CHOICES}"
+                reRender="user-choices-section" status="statLoad3"
+                onclick="saveCkEditorInputs();" oncomplete="addCkEditorToUserChoices();" />
+                <br />
+                <br />
+            </apex:outputPanel>
+            <!-- End UserChoiceCheckboxes -->
+
+            <br />
+            <apex:outputText value="Default value:" />
+            <apex:inputTextarea value="{!userChoice.ucDefaultValue}" 
+            styleClass="ckeditor-user-choices" />
+            <br />
+
+        </apex:pageBlockSection>
+      </apex:column>
+    </apex:pageBlockTable>
+
+    
+
+    <!-- Add another UserChoice -->
+    <apex:commandButton value="Add Another Prompt" action="{!ucUserChoices.addUserChoice}" 
+    rendered="{!ucUserChoices.ucNumUserChoices < ucUserChoices.MAX_NUM_USER_CHOICES}"
+    reRender="user-choices-section" status="statLoad3"
+    onclick="saveCkEditorInputs();" oncomplete="addCkEditorToUserChoices();" />
+
+    <br />
+    <br />
+    <apex:pageBlockSection title="Advanced Options" columns="1">
+      Queryname JSON:
+      <apex:inputTextarea value="{!ucUserChoices.ucQueryname}" style="height: 120px;" />
+    </apex:pageBlockSection>
+
+</apex:outputPanel>
+
+
+</apex:tab>
+<!-- ================================ End User Choice Feature ================================ -->
+
+<apex:tab label="Advanced Options" name="tab9" id="mtab9" rendered="{!showtab[9]}">
+<apex:pageBlockSection id="pbESign" title="E-Sign Settings" columns="1">
+  <apex:pageBlockSectionItem helpText="This field specifies the E-Signature product to be integrated with this S-Docs Template. When you generate a document with this template, S-Docs will provide an option to send the generated document for signature with the specified E-Signature product.">
+    E-Sign Vendor
+    <apex:inputField value="{!SDOC__SDTemplate__c.SDOC__E_Sign_Vendor__c}">
+      <apex:actionSupport event="onchange" action="{!allowExpireDate}" reRender="pbESign"/>
+    </apex:inputField>
+  </apex:pageBlockSectionItem>
+  <apex:inputField id="expire" rendered="{!allowExpire}" value="{!SDOC__SDTemplate__c.SDOC__E_Sign_Days_Until_Expiration__c}" 
+  type="number" style="width: 3em;" label="Days Until E-Signature Request Expires"/>
+  <apex:inputField id="expireRemindAfter" rendered="{!allowExpire}" value="{!SDOC__SDTemplate__c.SDOC__Remind_After_Generate__c}" 
+  type="number" style="width: 3em;"/>
+  <apex:inputField id="expireRemindBefore" rendered="{!allowExpire}" value="{!SDOC__SDTemplate__c.SDOC__Remind_Before_Expire__c}" 
+  type="number" style="width: 3em;"/>
+  <apex:inputCheckbox id="expireRuntime" rendered="{!allowExpire}" value="{!runtimeExpire}" label="Set Expiration Date at Runtime"/>
+</apex:pageBlockSection>
+<apex:pageBlockSection title="Preview Settings" columns="1">
+  <style type="text/css">
+    .advanced_tab_col_left_width { max-width: 600px; }
+  </style>
+  <div class="ft" style="font-size: 11px;">
+    <div class="advanced_tab_col_left_width">
+      When you fill in the Preview ID field with the ID of a(n) 
+      {!SDTemplate__c.Base_Object__c} record,
+      a button titled "Save &amp; Preview" will appear at the top of this page.
+      You can click this button to generate and view a test document
+      for the {!SDTemplate__c.Base_Object__c} record with the ID you provided.
+   </div>
+    <apex:inputText id="previewId" value="{!SDOC__SDTemplate__c.SDOC__Preview_ID__c}" style="width:125px;">
+      <apex:actionSupport event="onkeyup" rerender="mainPageMessage,generatePreviewContainer" status="statLoad1"/>
+    </apex:inputText>
+  </div>
+</apex:pageBlockSection>
+<apex:pageBlockSection title="Export Template" columns="1" rendered="{!NOT(isMSX)}">
+  <div class="advanced_tab_col_left_width">
+    Clicking &quot;Generate Importable Template Data&quot; will combine all of this template's data
+    into a single encoded string. 
+    <br />
+    <br />
+    If you copy and paste this string into the Template Body of a new template in another org,
+    and then click "Save", the newer template will have all the same definitions as the template you're looking at right now (i.e.
+    the same body, headers, footers, and settings such as "Email Send To" and "Auto-create Attachment").
+    <br />
+    <br />
+    Note that the data exported reflects the values of this template's fields 
+    at the time of page load, i.e. the last time you clicked the Template Editor button
+    (this is the case even if you have clicked &quot;Save&quot; since making any edits). 
+    If you've made any changes since the last time you clicked the Template Editor button, 
+    please click &quot;Save &amp; Close&quot;, <em>not</em> &quot;Save&quot;, before exporting your data.
+    <a target="_blank" href="http://www.sdocs.com/documentation/import-a-template-into-s-docs/">Click here</a> 
+    for more detailed instructions on importing exported template data.
+    <br />
+    <br />
+    A collection of exported S-Docs Templates is available in the <a href="http://sdocs.com/templates" target="_blank">S-Docs Template Library</a>.
+    You can import any of these templates into new S-Docs Templates in your own org.
+    <apex:outputPanel id="template_data_export_btn">
+      <apex:commandButton value="Generate Importable Template Data" 
+      action="{!makeShowTemplateDataExportTrue}" 
+      reRender="template_data_export_btn,template_data_export_result"
+      rendered="{!NOT(showTemplateDataExport)}" />
+    </apex:outputPanel>
+    <apex:outputPanel id="template_data_export_result">
+      <apex:outputPanel rendered="{!showTemplateDataExport}">
+        <div style="font-weight: bold; color:#4A4A56; font-size:12px;">Importable Template Data&nbsp;&nbsp;&nbsp;&nbsp;</div>
+        <apex:inputTextArea styleClass="advanced_tab_col_left_width" id="template_data_export_field" value="{!templateDataExport}" />
+        <br />
+        <apex:commandButton value="Copy to Clipboard" onclick="copyToClipboard('template_data_export_field');"
+        styleClass="buttonStyleCopyToClipboard" rerender="output" style="font-size:10px; width: 125px; height: 20px;"/>
+      </apex:outputPanel>
+    </apex:outputPanel>
+  </div>
+</apex:pageBlockSection>
+<apex:pageBlockSection title="Configure Contact Lookup" columns="2">
+    <apex:pageBlockSectionItem >
+        <div class="ft" style="font-size: 11px;">
+            When a document is generated using this template, the S-Docs engine will dynamically search your 
+            base record to find all related contact records. 
+            (This is done by interrogating all lookup fields on your base 
+            object for links to either the Contact object or the Account object). 
+            <br></br>All contacts records found during this search are then added to a picklist. 
+            This picklist is used during the last step that allows a user to choose which contact(s)
+            they want to email the documents to.
+            <br></br>
+            The list of related objects (on the right) can expand the picklist of available contact records. 
+            Additional related objects (such as junction objects) can be included for the
+            S-Docs engine to search during the document generation process. 
+            Any contact records found will be added to the picklist and therefore will be available 
+            for both emailing and merging functionality as explained above.
+            <br></br><br />Additionally, another feature (unrelated to the selection list on the right) 
+            leverages this picklist of related contacts. 
+            S-Docs allows you to place special tags such as into your template.
+            If used, the user will be presented with an additional step during the document generation process.
+            That step enables a user to chose a particular related contact from this same picklist. The 
+            data from the chosen contact will then be merged back into the document. 
+            Supported tags are:
+            <br />&#123;&#123;!PICKLIST.recordContact.name}}
+            <br />&#123;&#123;!PICKLIST.billingContact.name}}
+            <br />&#123;&#123;!PICKLIST.shippingContact.name}}
+            <br />
+        </div>
+    </apex:pageBlockSectionItem>
+        <apex:selectList value="{!contactRolesRT}" multiselect="true" size="15">
+                <apex:selectOptions value="{!rl1List}"/>
+        </apex:selectList>
+</apex:pageBlockSection>
+</apex:tab>
+</apex:tabPanel>
+</apex:pageBlock>
+
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__ContactRole__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML2__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML3__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML4__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML5__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML6__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML7__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML8__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML9__c}" rendered="false"/>
+    <apex:outputText value="{!SDOC__SDTemplate__c.SDOC__Template_XML10__c}" rendered="false"/> 
+    </apex:form>
+
+
+
+<apex:outputPanel id="ckEditorReplace">
+  <script>
+    function ckEditorReplace() {
+      YAHOO.force.com.eDialog.hide();
+      for ( var i in CKEDITOR.instances ){
+        var replaceInstance = i;
+        break;
+      }
+      var ckEditorRep = CKEDITOR.instances[replaceInstance];
+      ckEditorRep.setData(ckEditorRep.getData().replace(/{!relListReplaceRegex}/g, '{!output}'));
+    }
+    function ckEditorDelete() {
+      YAHOO.force.com.eDialog.hide();
+      for ( var i in CKEDITOR.instances ){
+        var deleteInstance = i;
+        break;
+      }
+      var ckEditorDel = CKEDITOR.instances[deleteInstance];
+      var templateXml = ckEditorDel.getData();
+      templateXml = templateXml.replace(/{!relListDeleteRegex}/g, ' ');
+      ckEditorDel.setData(templateXml);
+    }
+  </script>
+
+</apex:outputPanel>
+
+<script type="text/javascript">
+
+insert=function(output){
+    YAHOO.force.com.myDialog.hide();
+    var CKEDITOR   = window.CKEDITOR;
+    for ( var i in CKEDITOR.instances ){
+       var currentInstance = i;
+       break;
+    }
+        var oEditor   = CKEDITOR.instances[currentInstance];
+        oEditor.focus();
+        oEditor.insertHtml(output);
+};
+
+insertRender=function(output){
+    YAHOO.force.com.rDialog.hide();
+    var CKEDITOR   = window.CKEDITOR;
+    for ( var i in CKEDITOR.instances ){
+       var currentInstance = i;
+       break;
+    }
+        var oEditor   = CKEDITOR.instances[currentInstance];
+        oEditor.focus();
+        oEditor.insertHtml(output);
+};
+
+insertLine=function(output){
+    YAHOO.force.com.eDialog.hide();
+    var CKEDITOR   = window.CKEDITOR;
+    for ( var i in CKEDITOR.instances ){
+       var currentInstance = i;
+       break;
+    }
+        var oEditor   = CKEDITOR.instances[currentInstance];
+        oEditor.focus();
+        oEditor.insertHtml(output);
+        var s = oEditor.getSelection(); // getting selection
+        var selected_ranges = s.getRanges(); // getting ranges
+        var selected_ranges_org = s.getRanges(); // original
+        var node = selected_ranges[0].startContainer; // selecting the starting node
+        var parents = node.getParents(true); 
+        node = parents[parents.length - 2].getFirst();
+        while (true) {
+            var x = node.getNext();
+            if (x == null) {
+                break;
+            }
+            node = x;
+        }
+        s.selectElement(node);
+        selected_ranges = s.getRanges();
+        selected_ranges[0].collapse(false);  //  false collapses the range to the end of the selected node, true before the node.
+        s.selectRanges(selected_ranges);
+        oEditor.insertHtml('<style type="text/css"/></style>');
+        s.selectRanges(selected_ranges_org);
+};
+
+bind = function(){
+
+var CKEDITOR_BASEPATH = '{!URLFOR($Resource.SDOC__ckEditor,'ckeditor/')}';
+CKEDITOR.editorConfig = function( config )
+        {
+            config.height = '400';
+    //        config.autoGrow_onStartup = true;
+    //        config.autoGrow_minHeight = 400;
+    //        config.autoGrow_bottomSpace = 25;
+            // Define changes to default configuration here. For example:
+            config.defaultLanguage = 'en';
+            config.filebrowserBrowseUrl = '{!$Page.SDOC__SDFileList}';
+            config.filebrowserUploadUrl = '{!$Page.SDOC__SDFileUpload}';
+            config.filebrowserImageBrowseUrl = '{!$Page.SDOC__SDFileList}';
+            config.filebrowserImageUploadUrl = '{!$Page.SDOC__SDFileUpload}';
+    //        config.filebrowserWindowWidth = '640';
+    //        config.filebrowserWindowHeight = '480';
+            config.enterMode = CKEDITOR.ENTER_BR;
+            config.shiftEnterMode = CKEDITOR.ENTER_P;
+            config.allowedContent = true;
+            config.FormatSource = false;
+            config.FormatOutput = false;
+            config.removePlugins = 'fixed, autogrow';
+            if ('{!showLightningUI}' === 'true') {
+              config.skin = 'moono-lisa';
+            }
+
+            // Paste from Word fix 11/1/17
+            config.pasteFromWordRemoveFontStyles = false;
+            config.pasteFromWordRemoveStyles = false;
+
+    //        config.fullPage = true;
+    //        config.extraPlugins = 'tableresize';
+            CKEDITOR.dtd.$removeEmpty['span']=false;
+    //        config.extraPlugins = 'resize';
+    //        config.resize_maxWidth = '800';
+    //        config.forceSimpleAmpersand = true;
+            config.toolbar_Full =
+            [
+            ['Source','-','Preview','-','Maximize','-', 'ShowBlocks','-','Templates'],
+            ['Cut','Copy','Paste','PasteText','PasteFromWord','-','Print'],
+            ['Undo','Redo','-','Find','Replace'],
+            ['Image','Table','Link','PageBreak'],
+            '/',
+            ['Styles','Format','Font','FontSize'],
+            ['TextColor','BGColor'],        
+            ['Bold','Italic','Underline','Strike','RemoveFormat','-',],
+            ['NumberedList','BulletedList','-','Outdent','Indent'],
+            ['JustifyLeft','JustifyCenter','JustifyRight','JustifyBlock', 'lineheight']
+            ];
+
+            config.toolbar_UserChoices = [
+                ['Source','-','Preview','-','Maximize'],
+                ['Font','FontSize'],
+                ['TextColor','BGColor'],
+                ['Bold','Italic','Underline','Strike','RemoveFormat'],
+                ['Image','Table','Link','PageBreak']
+            ];
+        };
+
+        // Added 9/15/17 to add support for <span arabic="true">
+        CKEDITOR.stylesSet.add( 'default', [
+          /* Block Styles */
+
+          // These styles are already available in the "Format" combo ("format" plugin),
+          // so they are not needed here by default. You may enable them to avoid
+          // placing the "Format" combo in the toolbar, maintaining the same features.
+          /*
+          { name: 'Paragraph',    element: 'p' },
+          { name: 'Heading 1',    element: 'h1' },
+          { name: 'Heading 2',    element: 'h2' },
+          { name: 'Heading 3',    element: 'h3' },
+          { name: 'Heading 4',    element: 'h4' },
+          { name: 'Heading 5',    element: 'h5' },
+          { name: 'Heading 6',    element: 'h6' },
+          { name: 'Preformatted Text',element: 'pre' },
+          { name: 'Address',      element: 'address' },
+          */
+
+          { name: 'Italic Title',   element: 'h2', styles: { 'font-style': 'italic' } },
+          { name: 'Subtitle',     element: 'h3', styles: { 'color': '#aaa', 'font-style': 'italic' } },
+          {
+            name: 'Special Container',
+            element: 'div',
+            styles: {
+              padding: '5px 10px',
+              background: '#eee',
+              border: '1px solid #ccc'
+            }
+          },
+
+          /* Inline Styles */
+
+          // These are core styles available as toolbar buttons. You may opt enabling
+          // some of them in the Styles combo, removing them from the toolbar.
+          // (This requires the "stylescombo" plugin)
+          /*
+          { name: 'Strong',     element: 'strong', overrides: 'b' },
+          { name: 'Emphasis',     element: 'em' , overrides: 'i' },
+          { name: 'Underline',    element: 'u' },
+          { name: 'Strikethrough',  element: 'strike' },
+          { name: 'Subscript',    element: 'sub' },
+          { name: 'Superscript',    element: 'sup' },
+          */
+
+          { name: 'Marker',     element: 'span', attributes: { 'class': 'marker' } },
+
+          { name: 'Big',        element: 'big' },
+          { name: 'Small',      element: 'small' },
+          { name: 'Typewriter',   element: 'tt' },
+
+          { name: 'Computer Code',  element: 'code' },
+          { name: 'Keyboard Phrase',  element: 'kbd' },
+          { name: 'Sample Text',    element: 'samp' },
+          { name: 'Variable',     element: 'var' },
+
+          { name: 'Deleted Text',   element: 'del' },
+          { name: 'Inserted Text',  element: 'ins' },
+
+          { name: 'Cited Work',   element: 'cite' },
+          { name: 'Inline Quotation', element: 'q' },
+
+          { name: 'Language: RTL',  element: 'span', attributes: { 'dir': 'rtl' } },
+          { name: 'Language: LTR',  element: 'span', attributes: { 'dir': 'ltr' } },
+          { name: 'Language: Arabic',  element: 'span', attributes: { 'arabic': 'true' } },
+
+          /* Object Styles */
+
+          {
+            name: 'Styled image (left)',
+            element: 'img',
+            attributes: { 'class': 'left' }
+          },
+
+          {
+            name: 'Styled image (right)',
+            element: 'img',
+            attributes: { 'class': 'right' }
+          },
+
+          {
+            name: 'Compact table',
+            element: 'table',
+            attributes: {
+              cellpadding: '5',
+              cellspacing: '0',
+              border: '1',
+              bordercolor: '#ccc'
+            },
+            styles: {
+              'border-collapse': 'collapse'
+            }
+          },
+
+          { name: 'Borderless Table',   element: 'table', styles: { 'border-style': 'hidden', 'background-color': '#E6E6FA' } },
+          { name: 'Square Bulleted List', element: 'ul',    styles: { 'list-style-type': 'square' } }
+        ] );
+          
+        if (!document.getElementsByClassName) {
+            document.getElementsByClassName = function (cn) { 
+                var rx = new RegExp("(?:^|\\s)" + cn+ "(?:$|\\s)");
+                var allT = document.getElementsByTagName("*"), allCN = [], ac="", i = 0, a;
+                    while (a = allT[i=i+1]) {
+                      ac=a.className;
+                      if ( ac && ac.indexOf(cn) !==-1) {
+                        if(ac===cn){ allCN[allCN.length] = a; continue;   }
+                        rx.test(ac) ? (allCN[allCN.length] = a) : 0;
+                      }
+                    }
+                return allCN;
+            }
+        }
+        
+        if (document.getElementsByClassName){
+        var e = document.getElementsByClassName( 'ckeditor1' );
+        for(var i=0;i<e.length;i++)
+            {
+            var editor1 = CKEDITOR.replace( e[i], {toolbar: 'Full'});
+            }
+       }
+
+       addCkEditorToUserChoices();
+}
+windowonload = function(){
+        bind();
+        YAHOO.force.com.init();
+}
+
+// saveCkEditorInputs() and addCkEditorToUserChoices() are required for saving the
+// ckEditor data, re-creating the ckEditors, and re-populating them with their original data
+// whenever the Runtime Options tab is rerendered (which is very often)
+ckEditorInstanceData = {};
+function saveCkEditorInputs() {
+  ckEditorInstanceData = {};
+  //this is the foreach loop
+  for(var i in CKEDITOR.instances) {
+     ckEditorInstanceData[CKEDITOR.instances[i].name] = CKEDITOR.instances[i].getData();
+  }
+}
+function addCkEditorToUserChoices() {
+  if (document.getElementsByClassName){
+      var e = document.getElementsByClassName( 'ckeditor-user-choices' );
+      for(var i=0;i<e.length;i++) {
+          var editor1 = CKEDITOR.replace( 
+              e[i], 
+              { height: 64, toolbar:'UserChoices'}
+          );
+      }
+  }
+
+  for (var i in CKEDITOR.instances) {
+    CKEDITOR.instances[i].setData(ckEditorInstanceData[CKEDITOR.instances[i].name]);
+  }
+
+  addSalesforceFunctionalityToCKEditorImageButton();
+}
+/*
+function addCkEditorToUserChoices() {
+    if (document.getElementsByClassName) {
+        for (var ucNum = 0; ucNum < 10; ucNum++) {
+            for (var cbNum = 0; cbNum < 10; cbNum++) {
+                var checkBox = document.querySelector("input[class*='rtf-cb-" + ucNum + "-" + cbNum + "']");
+                if (checkBox != null) {
+                    var eClass = "ckeditor-user-choices-" + ucNum + "-" + cbNum;
+                    var e = document.querySelector("textarea[class^='" + eClass + "']");
+                    var noEditor = '-no-editor';
+                    if (checkBox.checked && !e.className.indexOf(noEditor) !== -1) {
+                        var editorUc = CKEDITOR.replace(
+                            e,
+                            { height: 64 }
+                        );
+                        e.className = e.className.replace(noEditor, '')
+                    } else {
+                        e.className = eClass + noEditor;
+                    }
+                }
+            }
+        }
+    }
+}
+*/
+addEvent(window, 'load', function(){ windowonload() });
+function addEvent(element, event, fn) {
+    if (element.addEventListener)
+        element.addEventListener(event, fn, false);
+    else if (element.attachEvent)
+        element.attachEvent('on' + event, fn);
+}
+
+/* -------------------------------- Start Image Upload Functionality -------------------------------- */
+function uploadImage(uploadInput) {
+    // Get the file the user selected and convert it to a base64-encoded string
+    var fileToUpload = uploadInput.files[0];
+    var reader = new FileReader();
+    reader.readAsDataURL(fileToUpload);
+
+    // Use JavaScript remoting to send the filename and base64-encoded file body to
+    // the uploadImage function in the SDTemplateEditor class, where the image
+    // will be uploaded as a Salesforce Document
+    reader.onload = function () {
+        var documentName = fileToUpload.name;
+        var documentBody = reader.result;
+        documentBody = documentBody.substring(documentBody.indexOf(",") + 1);
+        Visualforce.remoting.Manager.invokeAction(
+            '{!$RemoteAction.SDTemplateEditor.uploadImage}',
+            documentName, documentBody,
+            function (result, event) { // Callback for the JS Remoting function.
+                // Write the status of the SDTemplateEditor.uploadImage method to the page
+                if (event.status) {
+                    alert("Image successfully uploaded and made externally available.");
+                } else if (event.type === 'exception') {
+                    alert(event.message);
+                } else {
+                    alert(event.message);
+                }
+
+                // Hide Choose File at the end so ckEditor lets you exit the dialog without
+                // a "You changed some options..." popup
+                var iframe = document.querySelector('iframe[id$="fileInput"]');
+                var innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+                var uploadInput = innerDoc.querySelector('input[id$="fileInput_input"]');
+                var newInput = document.createElement("button");
+                newInput.type = "file";
+                newInput.id = "sdocsFileInput";
+                newInput.style = "display: none;";
+                replaceElement(uploadInput, newInput);
+
+                // Hide upload button after uploading
+                document.getElementById("newUploadBtn").style = "display: none;";
+            }
+        );
+    };
+    reader.onerror = function (error) {
+        alert("Error uploading image.");
+    };
+}
+
+// A small window appears after clicking "Send it to the Server". Replace this with
+// an element that contains the status of the image pending upload
+function removePostUploadWindow() {
+    var start = Date.now();
+    var elapsed = 0;
+    while (elapsed < 2000) {
+        var iframeToDelete = document.querySelector('iframe[id$="_fileInput"]');
+        if (iframeToDelete !== null) {
+            break;
+        }
+        elapsed = Date.now() - start;
+    }
+
+    var statusMessage = document.createElement("span");
+    statusMessage.id = "image-upload-status-message";
+    statusMessage.innerHTML = "Image Uploading...";
+    iframeToDelete.parentNode.replaceChild(statusMessage, iframeToDelete);
+}
+
+function replaceElement(elementToReplace, replacement) {
+    elementToReplace.parentNode.replaceChild(replacement, elementToReplace);
+}
+
+// Replaces CKEditor's standard image upload button
+// functionality with code that will upload the image to Salesforce via JavaScript Remoting
+function addSalesforceFunctionalityToCKEditorImageButton() {
+    try {
+        // Image Upload in ckEditor appears in an iframe
+        var iframe; var innerDoc; var uploadInput; var sendToServerBtn;
+        var start = Date.now();
+        var elapsed = 0;
+
+        iframe = document.querySelector('iframe[id$="fileInput"]');
+        innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+        uploadInput = innerDoc.querySelector('input[id$="fileInput_input"]');
+        sendToServerBtn = document.querySelector('a[title*="Send it to the Server"]') || document.getElementById("newUploadBtn");
+        if (sendToServerBtn !== null && sendToServerBtn !== undefined) {
+            // Overwrite class and id of this button to overwrite standard ckEditor functionality
+            sendToServerBtn.class = "new-class";
+            sendToServerBtn.id = "new-id";
+
+            // Replace old Send To Server button with our own.
+            // This means that when the user clicks "Send It To The Server", our own JS code
+            // for uploading images will run.
+            var newBtnStyle = 'background-color: #4CAF50; padding: 6px 12px; color: #FFF;'
+            var newBtn = document.getElementById("newUploadBtn");
+            if (newBtn === null) {
+                newBtn = document.createElement("button");
+                newBtn.id = "newUploadBtn";
+                newBtn.innerHTML = 'Upload Image';
+                newBtn.style = newBtnStyle
+                newBtn.onclick = function() { uploadImage(uploadInput); };
+                replaceElement(sendToServerBtn, newBtn);
+            }
+            else {
+                newBtn.style = newBtnStyle + " display: inline-block;";
+            }
+        }
+    } catch(err) {}
+}
+
+
+function addUploadFunctionalityOnImageBtnClick() {
+    // Get the Upload Image buttons in each instance of CKEditor (Template Body, Header1, Header2, Footer1, Footer2)
+    // and for each button, add an onclick function that will replace CKEditor's standard image upload button
+    // functionality with code that will upload the image to Salesforce via JavaScript Remoting
+    var ckEditorUploadImageButtons = document.querySelectorAll('a[class="cke_button cke_button__image cke_button_off"]');
+    for (var i = 0; i < ckEditorUploadImageButtons.length; i++) {
+        ckEditorUploadImageButtons[i].addEventListener(
+            'click', 
+            function() {
+                // Try this a couple times in case the image upload window hasn't loaded yet
+                // (Running this function multiple times in a row may cause problems,
+                // e.g. overwriting the wrong buttons or overwriting our own buttons we just made.
+                // Better way of doing this would be to try for 5 seconds and break the loop
+                // when the function is successful. Or use a callback function.)
+                for (var i = 250; i < 5000; i *= 2) {
+                    setTimeout( function() { addSalesforceFunctionalityToCKEditorImageButton() }, i);
+                }
+            },
+            false
+        );
+    }
+}
+
+// Wait 1 second after the window loads, since it'll take a few milliseconds after the onload event
+// for all of CKEditors stuff to load, which is required for addUploadFunctionalityOnImageBtnClick() to work.
+// This should only fail if they click the ckeditor Image button within 1.5 seconds of it loading, or
+// if their computer is really slow and ckeditor takes 1 second to render (when it fails, they'll see
+// the default grey "Send it to the server" button in the image upload tab rather than our green "Upload Image" button.)
+// Better way of doing this would be to try for 5 seconds and break the loop
+// when the function is successful. Or use a callback function.
+addEvent(window, 'load', function(){ setTimeout( function() { addUploadFunctionalityOnImageBtnClick(); }, 1000 ) });
+/* -------------------------------- Start Image Upload Functionality -------------------------------- */
+</script>
+
+</apex:page>

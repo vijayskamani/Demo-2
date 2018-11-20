@@ -1,0 +1,19 @@
+<apex:page controller="Flosum.RetrievalTypeController" sidebar="false">
+	<c:Wait />
+	<apex:pagemessages id="msg"/>
+    <apex:form >
+        <apex:pageBlock title="Retrieval Setting" id="creds">
+            <apex:pageBlockSection columns="1" >	
+				<apex:pageBlockSectionItem >
+					<apex:outputLabel value="Retrieval Type"/>
+					<apex:selectList size="1" value="{!selectedRetrievalType}">
+		                <apex:selectOptions value="{!retrievalTypeOptions}" />
+		            </apex:selectList>
+				</apex:pageBlockSectionItem>
+			</apex:pageBlockSection>
+			<apex:pageBlockbuttons location="top">
+            	<apex:commandbutton value="Update" action="{!updateRetrievalType}" rerender="msg" onClick="show();" onComplete="hide();"/>
+        	</apex:pageBlockbuttons>
+        </apex:pageBlock>
+	</apex:form>
+</apex:page>

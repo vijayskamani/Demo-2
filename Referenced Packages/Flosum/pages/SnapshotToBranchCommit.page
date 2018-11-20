@@ -1,0 +1,3670 @@
+<apex:page controller="Flosum.SnapshotToBranchCommitController" sidebar="false"  doctype="html-5.0" cache="false" id="pg">
+	<c:TrackPanel />
+
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster,'jszip-master/flosumsf/flosumsf1.6.0.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+    <script type="text/javascript" async="" src="{!URLFOR($Resource.zipp,'res/ga.js')}"></script>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/zip.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/workers/deflate.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/workers/inflate.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/workers/z-worker.js')}"/>
+
+	<c:DynamicLookupScript />
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/diffxmllib.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'beauty/forMatXML.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/pako.min.js')}"/>
+	<!-- 		added resources		 -->
+    <apex:stylesheet value="{!URLFOR($Resource.Flosum__Merge, 'Merge/css/bootstrapSF.min.css')}" />
+    
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/jquery-2.1.4.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/angular.min.js')}"/> 
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/difflib.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/angular-base64.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/deep-diff-0.3.3.min.js')}"/>
+
+	<apex:includeScript value="{!$Resource.Flosum__xmltojson}"/>
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/bkup.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/fullbkup.js')}"/>
+    
+	<c:Wait />
+ 
+    
+
+	<style>
+		.pagination { 
+			padding: 1%; 
+		} 
+		div .pagination { 
+			text-align: center; 
+		} 
+		td .dataCell label { 
+			font-weight: normal; 
+		} 
+		span.paginationEle { 
+			margin-left: 4px; 
+		} 
+		.pagination input { 
+			margin-left: 4px; 
+		} 
+		hr.pBlockDescription {
+		    margin-top: 0%;
+		    border-bottom: 1px solid #DBDBDB;
+		}
+		.disablePageLink{
+        	pointer-events : none;
+        }
+        .overrideCommitAlign{
+        	text-align: center;
+        }
+	</style>
+	<apex:pagemessages id="msg"/>
+	<apex:form rendered="{!if(snapName != null,true,false)}" id="fullform">
+		<apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="hide();">
+			<apex:param assignTo="{!message}" value="" name="newstr"/>
+		</apex:actionfunction>
+		<apex:actionfunction name="commitByApex" action="{!commitInChunk}" onComplete="populatePatch('{!patchListJSON}','{!logsListJSON}','{!logId}', '{!validateOnly}');">
+			<apex:param assignTo="{!commitChunkJSON}" value="" name="chunkJSON"/>
+		</apex:actionfunction>
+		<apex:actionfunction name="insertPatchManifest" action="{!populatePatch}"  onComplete="insertPatchBkup('{!validateOnly}');">
+			<apex:param assignTo="{!patchId}" value="" name="patchId"/>
+		</apex:actionfunction>
+		<apex:actionfunction name="insertAtt" action="{!insertMergeAttachment}"  onComplete="buildBlocks();">
+			<apex:param assignTo="{!attStr}" value="" name="attStr"/>
+			<apex:param assignTo="{!patchId}" value="" name="patchId"/>
+		</apex:actionfunction>
+		<apex:actionFunction name="refreshOnBranchSelect" reRender="tb,tbl,msg" oncomplete="hide();" />
+		<apex:actionfunction name="synchronize" action="{!synchronize}" reRender="none"/>
+		
+
+        <div ng-app="snapCommit">               
+            <div ng-controller ="Snap2BranchCommitControllerAJS"  id="angularControllerId">
+           	    <div class="ng-cloak">
+<!-- choose the branch to commit to -->           	    
+		<apex:sectionHeader title="{!$Label.flosum__commit_to_branch_title}" html-ng-show="CommitStep == 0"/>
+		<apex:sectionHeader title="{!$Label.flosum__commit_to_branch_title_2}" html-ng-show="CommitStep == 1"/>
+		<apex:outputPanel html-ng-show="CommitStep == 0">
+			<p>
+			{!$Label.flosum__commit_to_branch_description_1}
+			</p>
+			<p>
+			{!$Label.flosum__commit_to_branch_description_4}
+			</p>
+		</apex:outputPanel>
+		<apex:outputPanel html-ng-show="CommitStep == 1">
+			<p>{!$Label.flosum__commit_to_branch_description_5}</p>
+		</apex:outputPanel>
+		<apex:pageblock html-ng-show="CommitStep == 0"  id="tbl">
+			<apex:pageblockSection columns="1">
+				<apex:pageblocksectionItem >
+					<apex:outputLabel value="Snapshot"/>
+					<apex:outputText value="{!snapName}"/>
+				</apex:pageblocksectionItem>
+				
+				<apex:pageblocksectionItem >
+					<apex:outputLabel value="{!$ObjectType.Flosum__Repository__c.Label}"/>
+					<apex:selectList value="{!selectedRepository}" multiselect="false" size="1" disabled="{!if(GoToCommitType == 'oncommit',true,false)}">
+						<apex:selectOptions value="{!repositoryOptions}"/>
+						<apex:actionSupport event="onchange" action="{!listBranches}"  reRender="tbl,msg" oncomplete="hide();" onsubmit="show();"/>
+			        </apex:selectList>
+			    </apex:pageblocksectionItem>
+				
+				<apex:pageblocksectionItem rendered="{!commitList.size > 0}">
+					<apex:outputLabel value="{!$Label.flosum__commit_to_branch_label}"/>
+					<apex:outputPanel >
+			            <apex:inputHidden id="branchTargetId" value="{!commitTo}"/>
+			            <apex:inputText size="25" value="{!commitToLabel}" id="branchTargetName" onFocus="this.blur()" disabled="false" html-callitafterchange="refreshOnBranchSelect"/>           
+		  		    	<img src="/s.gif"
+			            onclick="dlm_openLookupPopup('{!$Component.branchTargetName}','{!$Component.branchTargetId}','{!$ObjectType.Branch__c.Name}',
+			            '{!$ObjectType.Branch__c.fields.Repository__c.Name} =\'{!selectedRepository}\'');clearMessage(); return false" 
+			            class="lookupIcon{!if(GoToCommitType == 'oncommit',' disablePageLink','')}"
+			            onmouseout="this.className='lookupIcon';" 
+			            alt="Patch Name Lookup (New Window)" 
+			            onmouseover="this.className='lookupIconOn';"/>
+		  		    </apex:outputPanel>
+			    </apex:pageblocksectionItem>
+			    <apex:pageblocksectionItem rendered="{!commitList.size > 0 && (commitTo == '' || commitTo == null)}">
+					<apex:outputLabel value="Branch Name"/>
+					<apex:inputText value="{!newBranchName}"/>
+			    </apex:pageblocksectionItem>
+			</apex:pageblockSection>
+		</apex:pageblock>
+
+<!-- choose the components to commit plus filter functionality -->           	    
+            <apex:pageblock html-ng-show="CommitStep == 0" id="FirstPageBlock">
+ 				<apex:pageBlockButtons location="both">
+				   	<apex:commandbutton value="Cancel" action="{!back}" reRender="msg"  id="buttonTwo" />
+					<apex:commandButton value="{!$Label.flosum__go_to_commit_button_label}" action="{!goToCommit}" reRender="tbl" onClick="clearMessage();show();" 
+										oncomplete="getCommitInformation('{!commitTo}','{!snapId}', '{!commitSuccess}', '{!JSENCODE(msg)}');" html-ng-disabled="isLoading"/>
+            	</apex:pageBlockButtons>
+			<apex:pageblockSection html-ng-show="componentListShow" id="pbs1">
+			    <apex:pageblocksectionItem id="pbsi1">
+					<apex:selectList value="{!selectedMetadataType}" multiselect="false" style="padding: 3px;" size="1" id="picklst1">
+						<apex:selectOptions value="{!availableMetatypes}"/>
+						<apex:actionSupport event="onchange" action="{!setFilter}"  reRender="tbl,msg" oncomplete="filterList('{!selectedMetadataType}');updateAllChecked();hide();" onsubmit="show();"/>
+					</apex:selectList>
+					<input type="text" ng-model="searchText" id="searchField"/>
+			    </apex:pageblocksectionItem>
+			</apex:pageblockSection>
+            	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>Components&nbsp;&nbsp;&nbsp;</h4>
+						  </td>
+			              <td align="right"><a ng-click="showHideComponentList();" style="cursor: pointer;">{{componentListShow ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table ng-show="componentListPtr.length  > 0 && filtered.length > 0 && componentListShow" class="list">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th><input type="checkbox" ng-click="checkUncheck((componentListPtr|filter:{compName:searchText}),0);" class="psli" ng-model="isAllChecked0" >&nbsp;</input></th>
+                             <th ng-repeat = "(key, value) in fieldSet0">
+                                <a ng-click="components.refreshOrderBy(key)">{{ components.orderByColumn == key ? components.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in componentListPtr |  filter:{compName:searchText}  |  orderBy: components.orderByColumn : components.isReverse | limitTo: components.viewLimit as filtered" ng-if="$index >= components.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td><input type="checkbox" name="selectedComps[]" value="{{ item['id'] }}" ng-model="item['check']"/></td>
+                            <td ng-repeat = "(key, value) in fieldSet0">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="componentListPtr.length > 0 && filtered.length > 0 && componentListShow" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="components.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="components.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="components.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="components.isPrevious() || disableNextPrevious" />
+                   Total {{(componentListPtr|filter:{compName:searchText}).length}} component(s), Page {{components.currentPageNo((componentListPtr|filter:{compName:searchText}).length)}} of {{components.totalPageCount((componentListPtr|filter:{compName:searchText}).length)}}
+                   <apex:commandbutton html-ng-click="components.listNext((componentListPtr|filter:{compName:searchText}).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="components.isNext((componentListPtr|filter:{compName:searchText}).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="components.showLast((componentListPtr|filter:{compName:searchText}).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="components.isNext((componentListPtr|filter:{compName:searchText}).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+                <div style="width: 100%;float: center; padding: 5px;text-align: center;" ng-show="(componentListPtr.length == 0 || filtered.length == 0) && componentListShow">
+                      <strong>No records to display</strong>
+                </div>
+            </apex:pageblock>
+            
+<!-- choose (2nd step) the components to commit  -->           	    
+           	<apex:pageblock html-ng-show="CommitStep == 1"  id="SecondPageBlock">
+				<apex:pageBlockButtons location="both">
+					<apex:commandButton value="Back To Snapshot" action="{!backToSnap}" reRender="msg,tbl,pbsi1" onClick="show();" onComplete="gotoPreviousPage();hide();"/>
+					<apex:commandButton value="{!$Label.flosum__go_to_commit_button_label}" action="{!snapCommit}" reRender="tbl" onClick="show();" 
+										onComplete="finalCommit({!commitSuccess},'{!logId}','{!commitTo}');" html-ng-disabled="isEmpty();"/>
+				</apex:pageBlockButtons>
+<!-- conflicted components   -->           	    
+   			<apex:pageblock >
+           	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>{!$Label.Conflict_Components_Section_Title}&nbsp;&nbsp;&nbsp;</h4>
+                		  	<div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body">{!$Label.conflict_components_section_description} <b>{!$Label.conflict_components_section_description_2}</b></div>
+	   							    </div>
+	   						</div>	 
+						  </td>
+			              <td align="right"><a ng-click="showHideConflictComponentList();" style="cursor: pointer;">{{componentShow ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table ng-show="componentList.length > 0 && componentShow" class="list">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th><input type="checkbox" ng-click="checkUncheck(componentList,1);" class="psli" ng-model="isAllChecked1" >&nbsp;</input></th>
+                             <th ng-repeat = "(key, value) in fieldSet0">
+                                <a ng-click="conflictComp.refreshOrderBy(key)">{{ conflictComp.orderByColumn == key ? conflictComp.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in componentList |  orderBy: conflictComp.orderByColumn : conflictComp.isReverse | limitTo: conflictComp.viewLimit" ng-if="$index >= conflictComp.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td><input type="checkbox" name="selectedComps1[]" value="{{ item['id'] }}" ng-model="item['check']"/></td>
+                            <td ng-repeat = "(key, value) in fieldSet1">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="componentList.length > 0 && componentShow" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="conflictComp.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="conflictComp.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="conflictComp.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="conflictComp.isPrevious() || disableNextPrevious" />
+                   Total {{(componentList).length}} component(s), Page {{conflictComp.currentPageNo((componentList).length)}} of {{conflictComp.totalPageCount((componentList).length)}}
+                   <apex:commandbutton html-ng-click="conflictComp.listNext((componentList).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="conflictComp.isNext((componentList).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="conflictComp.showLast((componentList).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="conflictComp.isNext((componentList).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+                <div style="width: 100%;float: center; padding: 5px;text-align: center;" ng-show="componentList.length == 0 && componentShow">
+                      <strong>No records to display</strong>
+                </div>
+            </apex:pageblock>
+<!-- safe components   -->           	    
+   			<apex:pageblock title="{!$Label.flosum__safe_to_commit_section_title}">
+           	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>{!$Label.flosum__safe_to_commit_section_title}&nbsp;&nbsp;&nbsp;</h4>
+                		  	<div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body">{!$Label.safe_to_commit_section_description}</div>
+	   							    </div>
+	   						</div>	 
+						  </td>
+			              <td align="right"><a ng-click="showHideSafeComponentList();" style="cursor: pointer;">{{newCompShow ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table ng-show="newCompList.length > 0 && newCompShow" class="list">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th><input type="checkbox" ng-click="checkUncheck(newCompList,2);" class="psli" ng-model="isAllChecked2" >&nbsp;</input></th>
+                             <th ng-repeat = "(key, value) in fieldSet0">
+                                <a ng-click="newComp.refreshOrderBy(key)">{{ newComp.orderByColumn == key ? newComp.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in newCompList |  orderBy: newComp.orderByColumn : newComp.isReverse | limitTo: newComp.viewLimit" ng-if="$index >= newComp.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td><input type="checkbox" name="selectedComps2[]" value="{{ item['id'] }}" ng-model="item['check']"/></td>
+                            <td ng-repeat = "(key, value) in fieldSet0">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="newCompList.length > 0 && newCompShow" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="newComp.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="newComp.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="newComp.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="newComp.isPrevious() || disableNextPrevious" />
+                   Total {{(newCompList).length}} component(s), Page {{newComp.currentPageNo((newCompList).length)}} of {{newComp.totalPageCount((newCompList).length)}}
+                   <apex:commandbutton html-ng-click="newComp.listNext((newCompList).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="newComp.isNext((newCompList).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="newComp.showLast((newCompList).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="newComp.isNext((newCompList).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+                <div style="width: 100%;float: center; padding: 5px;text-align: center;" ng-show="newCompList.length == 0 && newCompShow">
+                      <strong>No records to display</strong>
+                </div>
+            </apex:pageblock>
+
+	<!-- not committed components   -->           	    
+   			<apex:pageblock >
+           	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>{!$Label.Not_Merge_Section_Title}&nbsp;&nbsp;&nbsp;</h4>
+                		    <div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body">{!$Label.not_merge_section_description}</div>
+	   							    </div>
+	   						</div>	 
+						  </td>
+			              <td align="right"><a ng-click="showHideNotCommitComponentList();" style="cursor: pointer;">{{notMergeCompShow ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table ng-show="notMergeCompList.length > 0 && notMergeCompShow" class="list">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th><input type="checkbox" ng-click="checkUncheck(notMergeCompList,3);" class="psli" ng-model="isAllChecked3" >&nbsp;Overwrite</input></th>
+                             <th ng-repeat = "(key, value) in fieldSet1">
+                                <a ng-click="notMergeComp.refreshOrderBy(key)">{{ notMergeComp.orderByColumn == key ? notMergeComp.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in notMergeCompList |  orderBy: notMergeComp.orderByColumn : notMergeComp.isReverse | limitTo: notMergeComp.viewLimit" ng-if="$index >= notMergeComp.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td><input type="checkbox" name="selectedComps3[]" value="{{ item['id'] }}" ng-model="item['check']"/></td>
+                            <td ng-repeat = "(key, value) in fieldSet1">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="notMergeCompList.length > 0 && notMergeCompShow" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="notMergeComp.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="notMergeComp.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="notMergeComp.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="notMergeComp.isPrevious() || disableNextPrevious" />
+                   Total {{(notMergeCompList).length}} component(s), Page {{notMergeComp.currentPageNo((notMergeCompList).length)}} of {{notMergeComp.totalPageCount((notMergeCompList).length)}}
+                   <apex:commandbutton html-ng-click="notMergeComp.listNext((notMergeCompList).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="notMergeComp.isNext((notMergeCompList).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="notMergeComp.showLast((notMergeCompList).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="notMergeComp.isNext((notMergeCompList).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+                <div style="width: 100%;float: center; padding: 5px;text-align: center;" ng-show="notMergeCompList.length == 0 && notMergeCompShow">
+                      <strong>No records to display</strong>
+                </div>
+            </apex:pageblock>
+				
+				
+				
+            </apex:pageblock>
+            
+
+				</div>
+			</div>
+		</div>
+		
+	</apex:form>
+
+	<script>
+		$( document ).ready(function() {
+        });
+ 
+ 	    if(typeof jQuery != 'undefined'){
+    	     $j =jQuery.noConflict();
+    	}
+    	
+    function getDate(jsonDate){
+    	var backToDate = new Date(jsonDate).toUTCString();
+    	return backToDate;
+    }
+    
+    function correctDate(list){
+    	for (var i = 0; i< list.length; i++ ){
+    		var jsonDate = list[i].changedOn;
+    		if (jsonDate != undefined){
+    			list[i].changedOn = getDate(jsonDate);
+    		}
+    	}
+    }
+    
+    var nSelected = 0;
+    
+/*
+    function goToSecondPage(){
+    	nSelected = getScope().initialSelectionSet0.length;
+    	////console.log('call goToSecondpage with param = '+nSelected);
+    	goToCommit(nSelected);
+    }
+*/    
+    function gotoPreviousPage(){
+    	////////console.log('gotoPreviousPage');
+    	getScope().CommitStep = 0;
+    	getScope().initialize();
+    }
+    
+    function filterList(val){
+    	////////console.log('filterList:'+val);
+    	getScope().typeFilter = val;
+    	getScope().applyFilter();
+    }
+    
+    function updateAllChecked(){
+    	getScope().updateAccumulator();
+    }
+    	
+        
+	    const xmlName = 'package.xml';
+	    const apiVersion = {!localApiVersion};
+        var sessionId = "{!$Api.Session_Id}";
+
+		Visualforce.remoting.timeout = 120000;
+		var totalRecords = 0;
+		var NameSpacePrefix = '{!NameSpacePrefix}';
+
+		zip.workerScripts = {
+  			deflater: ['res/js/workers/z-worker.js', 'res/js/workers/deflate.js'],
+  			inflater: ['res/js/workers/z-worker.js', 'res/js/workers/inflate.js']
+		};
+		
+		zip.useWebWorkers = false;
+		
+        var zipWriter, writer, creationMethod, URL = window.webkitURL || window.mozURL || window.URL;
+		
+		var attList = [];
+		var metaItemList = [];
+		var metaFoundMap = {};
+		var fileMap = {};
+		var auraFileMap = {};
+		var allCompMap = {};
+		var allCompFilter = {};
+		var allCompTypeFilter = {};
+		var normalZip = new JSZip(); 
+		var ComponentAttachmentWraperList = [];
+		var isPatchCreated = false; 
+		
+		var parentMap = {};
+    	parentMap['Workflow'] = 'Workflow';
+    	parentMap['CustomObject'] = 'CustomObject';
+    	parentMap['CustomLabels'] = 'CustomLabels';
+    	parentMap['AssignmentRules'] = 'AssignmentRules';
+    	parentMap['AutoResponseRules'] = 'AutoResponseRules';
+    	parentMap['MatchingRules'] = 'MatchingRules';
+    	parentMap['ManagedTopics'] = 'ManagedTopics';
+    	parentMap['EscalationRules'] = 'EscalationRules';
+    	parentMap['Package-xml'] = 'Package-xml';
+		
+		
+		var mmap = new Object();
+	    mmap['CustomField'] = true;
+	    mmap['CustomLabel'] = true;
+	    mmap['CompactLayout'] = true;
+	    mmap['WebLink'] = true;
+	    mmap['RecordType'] = true;
+	    mmap['ListView'] = true;
+	    mmap['FieldSet'] = true;
+	    mmap['AssignmentRule'] = true;
+	    mmap['AutoResponseRule'] = true;
+	    mmap['ValidationRule'] = true;
+	    mmap['WorkflowTask'] = true;
+		mmap['WorkflowOutboundMessage'] = true;
+		mmap['WorkflowFieldUpdate'] = true;
+		mmap['WorkflowKnowledgePublish'] = true;
+		mmap['WorkflowAlert'] = true;
+		mmap['WorkflowRule'] = true;
+		
+		mmap['SharingOwnerRule'] = true;
+		mmap['SharingCriteriaRule'] = true;
+		mmap['BusinessProcess'] = true;
+		mmap['SharingReason'] = true;
+		mmap['EscalationRule'] = true;
+		mmap['MatchingRule'] = true;
+		mmap['ManagedTopic'] = true;
+		
+		var folderMap = new Object();
+		folderMap['DocumentFolder'] = 'Document';
+		folderMap['DashboardFolder'] = 'Dashboard';
+		folderMap['ReportFolder'] = 'Report';
+		folderMap['EmailFolder'] = 'EmailTemplate';
+
+		var revFolderMap = new Object();
+		revFolderMap['Document'] = true;
+		revFolderMap['Dashboard'] = true;
+		revFolderMap['Report'] = true;
+		revFolderMap['EmailTemplate'] = true;
+		
+		var bundleTypes = {};
+    	bundleTypes['AuraDefinitionBundle'] = 'AuraDefinitionBundle';
+    	
+    	
+    	function showErrorMessage(str)
+    {
+        if($j('#msg') != undefined)
+        {
+            $j('#msg').remove();
+        }
+        var parentVal = $j("[id$='msg']");
+        if(parentVal != undefined)
+        {
+            var childVal = '<span id="msg">'+
+                            '<span>'+
+                                '<div class="message errorM3" role="alert">'+
+                                    '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                        '<tbody>'+
+                                            '<tr valign="top">'+
+                                            '<td>'+
+                                                '<img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR">'+
+                                            '</td>'+
+                                            '<td class="messageCell">'+
+                                                '<div class="messageText">'+
+                                                    '<span style="color:#cc0000">'+
+                                                        '<h4>Error:</h4>'+
+                                                    '</span>'+
+                                                    str+'<br>'+
+                                                '</div>'+
+                                            '</td>'+
+                                            '</tr>'+
+                                            '<tr>'+
+                                                '<td></td>'+
+                                                '<td></td>'+
+                                            '</tr>'+
+                                        '</tbody>'+
+                                    '</table>'+
+                                '</div>'+
+                            '</span>'+
+                        '</span>';
+             parentVal.before(childVal);
+        }
+        unbindWindow();
+    }
+    	
+
+		var commitIds, bodySize, componentMetaMap, metaIds, fileIndex, commitSuccess, branchId, componentMetaMap, currentIndex, buildLogId;
+		
+		    /****** 			angularJs modules description				******/
+    
+        var myApp = angular.module("snapCommit", ['base64']);
+        
+        myApp.$inject = ['$scope', '$filter', '$controller'];
+        
+        myApp.service('dataManager', function($q) {
+            return {
+                getAllItems : function() {
+                    var deferred = $q.defer();
+                    var snapId = '{!snapId}';
+                    if (snapId == undefined || snapId == ''){
+                    	snapId = '';
+                    }
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SnapshotToBranchCommitController.getAllItems}',
+		                snapId,
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    
+                    return deferred.promise;
+                },
+                getItems : function(list) {
+                    var deferred = $q.defer();
+                    var snapId = '{!snapId}';
+                    if (snapId == undefined || snapId == ''){
+                    	snapId = '';
+                    }
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SnapshotToBranchCommitController.getItems}',
+		                snapId,
+		                JSON.stringify(list),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    
+                    return deferred.promise;
+                },
+                getComparison : function(list) {
+                    var deferred = $q.defer();
+                    ////////console.log('br='+branchRef);
+                    ////////console.log('snapId='+snapRef);
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SnapshotToBranchCommitController.getComparison}',
+                        snapRef,
+		                branchRef,
+		                JSON.stringify(list),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    
+                    return deferred.promise;
+                }
+                
+            }
+        });
+        
+           myApp.directive('postrenderAction', postrenderAction); 
+
+		/* @ngInject */
+		function postrenderAction($timeout) {
+	    	// Directive Interface
+	    	// Defines base properties for the directive.
+    		var directive = {
+        		restrict: 'A',
+        		priority: 101,
+	    	    link: link
+		    };
+    		return directive;
+
+		    // Link Function
+		    // Provides functionality for the directive during the DOM building/data binding stage.
+    		function link(scope, element, attrs) {
+        		$timeout(function() {
+            		scope.$evalAsync(attrs.postrenderAction);
+		        }, 0);
+    		}
+		}
+        
+        
+        var app = myApp.controller("Snap2BranchCommitControllerAJS", function($scope, $base64, $controller, dataManager,$filter,  $interval, $timeout, filterFilter) {
+       		$scope.componentBaseList = [];
+        	$scope.componentListPtr = [];
+        	
+        	$scope.componentList = []; // type ConflictWrapper
+            $scope.newCompList = []; // type SafeCommitCompWrapper
+            $scope.notMergeCompList = []; // type NotCommitCompWrapper
+            
+            $scope.attIdMap = {};
+            $scope.globalAttIdMap = {};
+            
+            $scope.componentListShow = true;
+            $scope.componentShow = true;
+            $scope.newCompShow = true;
+            $scope.notMergeCompShow = true;
+            
+            $scope.components = new Page({orderByColumn:'changedOn', isReverse: true});
+            $scope.conflictComp = new Page({orderByColumn:'compName', isReverse: true});
+            $scope.newComp = new Page({orderByColumn:'compName', isReverse: true});
+            $scope.notMergeComp = new Page({orderByColumn:'compName', isReverse: true});
+            
+            var tempObj0 = {};
+            tempObj0['compName'] = 'Component Name';
+            tempObj0['compType'] = 'Component Type';
+            tempObj0['changedBy'] = 'Changed By';
+            tempObj0['changedOn'] = 'Changed On';
+            $scope.fieldSet0 = tempObj0;
+            $scope.initialSelectionSet0 = [];
+			$scope.isAllChecked0 = false;
+
+            var tempObj1 = {};
+            tempObj1['compName'] = 'Component Name';
+            tempObj1['compType'] = 'Component Type';
+            tempObj1['changedBy'] = 'Changed By';
+            tempObj1['changedOn'] = 'Changed On';
+            tempObj1['reason'] = 'Reason';
+            $scope.fieldSet1 = tempObj1;
+            $scope.selectionSet1 = [];
+            $scope.selectionSet2 = [];
+            $scope.selectionSet3 = [];
+			$scope.isAllChecked1 = false;
+			$scope.isAllChecked2 = false;
+			$scope.isAllChecked3 = false;
+			
+			$scope.isLoading = false;
+			$scope.CommitStep = 0;
+			$scope.typeFilter = 'all';
+			
+			
+			$scope.updateAccumulator = function(){
+				$scope.isAllChecked0 = false;
+			}
+			
+			  			  // Watch componentList for changes
+  			$scope.$watch('componentBaseList|filter:{check:true}', function (nv) {
+			    $scope.initialSelectionSet0 = nv.map(function (c) {
+      				return c.id;
+    			});
+  			}, true);
+  			$scope.$watch('componentList|filter:{check:true}', function (nv) {
+			    $scope.selectionSet1 = nv.map(function (c) {
+      				return c.id;
+    			});
+  			}, true);
+  			$scope.$watch('newCompList|filter:{check:true}', function (nv) {
+			    $scope.selectionSet2 = nv.map(function (c) {
+      				return c.id;
+    			});
+  			}, true);
+  			$scope.$watch('notMergeCompList|filter:{check:true}', function (nv) {
+			    $scope.selectionSet3 = nv.map(function (c) {
+      				return c.id;
+    			});
+  			}, true);
+  			
+  			$scope.getCommitSet = function(){
+  				var a1 = $scope.selectionSet1.concat($scope.selectionSet2);
+  				var a2 = $scope.selectionSet3.concat(a1);
+  				return a2;
+  			}
+            
+            
+            $scope.checkUncheck = function(compLi,nList) {
+            	if (nList == 0){
+                 	setAll(compLi,$scope.isAllChecked0); 
+                }else if (nList == 1){
+                 	setAll(compLi,$scope.isAllChecked1); 
+            	}else if (nList == 2){
+                 	setAll(compLi,$scope.isAllChecked2); 
+            	}else if (nList == 3){
+                 	setAll(compLi,$scope.isAllChecked3); 
+            	}else{
+            		$scope.isAllChecked0 = false; 
+            		$scope.isAllChecked1 = false;
+            		$scope.isAllChecked2 = false;
+            		$scope.isAllChecked3 = false;
+            		setAll(compLi,false);
+            	}	
+
+            };
+             
+			$scope.isEmpty = function(){
+				return ($scope.selectionSet1.length == 0 && $scope.selectionSet2.length == 0 && $scope.selectionSet3.length == 0);
+			}
+			
+            
+             $scope.showHideConflictComponentList = function(){
+			    $timeout(function() {
+                       $scope.componentShow = ($scope.componentShow)? false:true;
+                });
+			}
+  
+             $scope.showHideSafeComponentList = function(){
+			    $timeout(function() {
+                       $scope.newCompShow = ($scope.newCompShow)? false:true;
+                });
+			}
+  
+             $scope.showHideNotCommitComponentList = function(){
+			    $timeout(function() {
+                       $scope.notMergeCompShow = ($scope.notMergeCompShow)? false:true;
+                });
+			}
+             
+            
+            $scope.showHideComponentList = function(){
+			    $timeout(function() {
+                       $scope.componentListShow = ($scope.componentListShow)? false:true;
+                });
+			}
+			
+			var left_to_resolve = 0;
+			
+			$scope.loadData = function(blockList,callback){
+				if (blockList != undefined && blockList.length > 0){
+					var block = blockList.shift();
+					dataManager.getItems(block).then(
+    	                function (data) {
+      	                    if (data != null && data != undefined && data.items != undefined &&  data.items.length > 0){
+      	                    	$scope.componentBaseList = $scope.componentBaseList.concat(data.items);
+      	                    	mergeAttIds(data.attIdsMap);
+							    $timeout(function() {
+							    	$scope.loadData(blockList,callback);
+							    });
+    	                	}else{
+    	                  		setMessageOnPage('Changes in Flosum\'s database were detected: please reload the page');
+    	                    }	
+    	                },
+            	        function (error) {
+            				showErrorMessage('Error:'+error);
+            				$scope.isLoading = false;
+                    	}
+					);
+				}else{
+					left_to_resolve = 0;
+					if (callback != undefined){
+						callback();
+					}
+				}
+				
+				function mergeAttIds(attIdsMap){
+					if (attIdsMap != undefined){
+						var attIdsSet = Object.keys(attIdsMap);
+						for (var x = 0; x < attIdsSet.length; x++){
+							$scope.globalAttIdMap[attIdsSet[x]] = attIdsMap[attIdsSet[x]];
+						}
+					}
+				}
+			};
+			
+			$scope.compareData = function(blockList,callback){
+				////console.log('compareData: block: '+blockList.length);
+				if (blockList != undefined && blockList.length > 0){
+					var block = blockList.shift();
+					dataManager.getComparison(block).then(
+    	                function (data) {
+      	                    if (data != null && data != undefined){
+      	                    	if (data.msg == ''){
+      	                    		updateLists(data);
+						    		$scope.compareData(blockList,callback);
+						    	}else{
+						    		showErrorMessage('Error:'+ ((data.msg == undefined || data.msg == '') ? 'Unknown error' : data.msg) );
+						    	}
+    	                	}else{
+    	                  		setMessageOnPage('Changes in Flosum\'s database were detected: please reload the page');
+    	                    }	
+    	                },
+            	        function (error) {
+            				showErrorMessage('Error:'+error);
+            				$scope.isLoading = false;
+            				hide();
+                    	}
+					);
+				}else{
+					left_to_resolve = 0;
+					if (callback != undefined){
+						callback();
+					}else{
+						//////console.log('callback is null!');
+						$scope.isLoading = false;
+            			hide();
+					}
+				}
+				
+				function updateLists(result){
+					////console.log('====  result ====');
+					////console.log('Conflict:'+result.conflictCommit.length);
+					////console.log('Safe:'+result.safeCommit.length);
+					////console.log('None:'+result.notCommit.length);
+					if (result.conflictCommit.length > 0){
+						populateArray($scope.componentList,result.conflictCommit,'Conflict');
+					}
+					if (result.safeCommit.length > 0){
+						populateArray($scope.newCompList,result.safeCommit,'Safe');
+					}
+					if (result.notCommit.length > 0){
+						populateArray($scope.notMergeCompList,result.notCommit,'None');
+					}
+				}
+				
+				function populateArray(dst,src,type){
+					if (type == 'Conflict' || type == 'Safe'){
+						for (var x = 0; x < src.length; x++){
+							var c = selectedCompMap[src[x]];
+							if (c != undefined){
+								c.check = false;// can be false (optional)
+								dst.push(c);
+							}
+						}
+					}else if (type == 'None'){
+						for (var x = 0; x < src.length; x++){
+							var sourceComp = src[x];
+							var notC = selectedCompMap[sourceComp.id];
+							if (notC != undefined){
+								var reasonTextA = 'The same as Version ';
+								var reasonTextB = ' in Branch';
+								if (sourceComp.isFromRepository == true || sourceComp.isFromRepository == 'true'){
+									reasonTextB = ' in Repository';	
+								}
+								notC.reason = 'N/A';
+								if (sourceComp.sameToVersion != undefined){
+									notC.reason = reasonTextA + sourceComp.sameToVersion + reasonTextB;
+								}
+								notC.check = false;
+								dst.push(notC);
+							}
+						}
+					}
+				}
+			};
+
+			const BLOCKSIZE = 3000;
+			// invoked only when $scope.initialSelectionSet0 list is not empty
+			$scope.secondStageCommit = function(){
+				// init maps and vars
+				allCompMap = {};
+				allCompFilter = {};
+	        	$scope.componentList = []; // type ConflictWrapper
+    	        $scope.newCompList = []; // type SafeCommitCompWrapper
+        	    $scope.notMergeCompList = []; // type NotCommitCompWrapper
+        	    // change layout
+				$scope.CommitStep = 1;
+        	    // set message
+        	    setMessageOnPage('Compare with branch...');
+        	    
+        	    var commitMap = {};
+        	    for (var x = 0; x < $scope.initialSelectionSet0.length; x++){
+        	    	commitMap[$scope.initialSelectionSet0[x]] = true;
+        	    }
+				
+				//create a map
+				for (var x = 0; x < $scope.componentBaseList.length; x++){
+					var comp =  $scope.componentBaseList[x];
+					if (commitMap[comp.id] != undefined){
+						allCompMap[comp.id] = comp;//allCompMap must contain only components to commit
+						allCompFilter[comp.fileName] = true;
+						if (allCompTypeFilter[comp.compType] == undefined){
+							allCompTypeFilter[comp.compType] = true;
+						}
+						var attId = $scope.globalAttIdMap[comp.id];
+						if (attId != undefined && $scope.attIdMap[attId] == undefined){
+							$scope.attIdMap[attId] = true;
+						}
+					}
+				}
+				$scope.globalAttIdMap = {};
+				// create  a list of selected types  and list of ids to get Attachments
+				var request = new Object();
+				request.attIds = Object.keys($scope.attIdMap);
+
+				////console.log('request to get attachments:'+JSON.stringify(request));
+				////console.log('filter by names:'+JSON.stringify(allCompFilter));
+				////console.log('filter by compType:'+JSON.stringify(allCompTypeFilter));
+				getSnapshotAttachmentsInfo(request.attIds);
+			}
+			
+			var selectedCompMap = {};
+			
+			$scope.updateMetaData = function(){
+			////console.log('fileMap:'+JSON.stringify(fileMap));
+			////console.log('allCompMap:'+JSON.stringify(allCompMap));
+					////console.log('auraFileMap:'+JSON.stringify(auraFileMap));
+					////console.log('$scope.initialSelectionSet0:'+$scope.initialSelectionSet0.length + 'items');
+					selectedCompMap = {};
+					var metaCrcMap = {};
+					var isFound = false;
+					for(var i = 0; i < $scope.initialSelectionSet0.length; i++)
+					{
+						var id = $scope.initialSelectionSet0[i];
+						if(allCompMap[id] != undefined)
+						{
+							var meta = allCompMap[id];
+							var API_Name = meta.compName;
+							var File_Name  = meta.fileName;
+							var MetaType = meta.compType;
+							var metId = meta.id;
+							var key = '';
+							if(mmap[MetaType] == undefined)
+							{
+								if(folderMap[MetaType] != undefined)
+								{
+									key = folderMap[MetaType]+"#"+File_Name;
+								}
+								else
+								{
+									key = MetaType+"#"+File_Name;
+								}
+							}
+							else
+							{
+								key = MetaType+"#"+API_Name;
+							}
+							if(fileMap[key] != undefined && metId != undefined)
+							{
+								var tempMeta = new Object();
+								tempMeta.Id = metId;
+								tempMeta.crc32 = fileMap[key].crc32;
+								tempMeta.MetaType = MetaType;
+								tempMeta.API_Name = API_Name;
+                                tempMeta.File_Name = File_Name;
+                                tempMeta.key = key;
+								
+                                if(fileMap[key+"-meta.xml"] != undefined)
+								{
+									tempMeta.crc32 = tempMeta.crc32+' '+fileMap[key+"-meta.xml"].crc32;
+								}
+                                
+								metaCrcMap[metId] = tempMeta.crc32;
+                                metaFoundMap[metId] = tempMeta;
+                                meta.crc32 = tempMeta.crc32;
+								selectedCompMap[metId] = meta;
+								isFound = true;
+							}
+							else if(bundleTypes[MetaType] != undefined)
+							{
+								var bundleArr = [];
+								var tempMeta = new Object();
+								tempMeta.Id = metId;
+								tempMeta.crc32 = '';
+								tempMeta.MetaType = MetaType;
+								tempMeta.API_Name = API_Name;
+                                tempMeta.File_Name = File_Name;
+                                tempMeta.key = key;
+                                
+                                if (auraFileMap[File_Name] != undefined){
+                                	var auraMap = auraFileMap[File_Name];
+									for(var fName in auraMap)
+									{
+										var descriptor = {};
+										descriptor.fileName = fName;
+										descriptor.crc32 = auraMap[fName].crc32;
+										bundleArr.push(descriptor);
+										isFound = true;
+									}
+                                }
+								if (bundleArr.length > 0){
+									tempMeta.crc32 = composeBundleCrc(bundleArr);
+								}
+								metaCrcMap[metId] = tempMeta.crc32;
+                                metaFoundMap[metId] = tempMeta;
+                                meta.crc32 = tempMeta.crc32;
+								selectedCompMap[metId] = meta;
+							}
+							
+						}
+					}
+					
+					// comment this in production
+					getSizeObject1level('metaCrcMap',metaCrcMap);
+					getSizeObject2level('metaFoundMap',metaFoundMap);
+					getSizeObject2level('fileMap',fileMap);
+					getSizeObject2level('auraFileMap',metaCrcMap);
+					getSizeObject2level('allCompMap',fileMap);
+					
+					////console.log('metaFoundMap:'+JSON.stringify(metaFoundMap));
+					////console.log('metaCrcMap:'+JSON.stringify(metaCrcMap));
+					
+					$scope.compareMetaData(metaCrcMap);
+					allCompMap = {};// free memory
+					$scope.componentListPtr = []; 
+			}
+			
+			function getSizeObject1level(name,obj){
+				var keys = [];
+				if (obj != undefined){
+					keys = Object.keys(obj);
+				}
+				////console.log(name+':'+keys.length + 'keys');
+			}
+			
+			function getSizeObject2level(name,obj){
+				var keys = [];
+				var size = 0;
+				if (obj != undefined){
+					keys = Object.keys(obj);
+				}
+				////////console.log('keys:'+JSON.stringify(keys));
+				for (var x = 0; x < keys.length; x++){
+					var key = keys[x];
+					var o = obj[key];
+					if (o != undefined){
+						size += JSON.stringify(o).length;
+					}
+				}
+				////console.log(name+':'+keys.length + 'keys');
+				////console.log('size:'+size + 'bytes');
+				////console.log('============');
+			}
+
+			$scope.compareMetaData = function(metaCrcMap){
+				//////console.log('compareMetaData:');
+				// split all set into blocks by 4000
+				var blocks = [];
+				var first = 0;
+				var end = BLOCKSIZE;
+				var len = $scope.initialSelectionSet0.length;
+				////////console.log('sel:'+JSON.stringify($scope.initialSelectionSet0));
+				while (first < len){
+					if (end > len){
+						end = len;
+					}
+					var block = new Object();
+					block.metaIdList = $scope.initialSelectionSet0.slice(first,end);// get slice of array
+					block.crcMap = getSubMap(block.metaIdList);// get submap of map
+					blocks.push(block);
+					first = end;
+					end += BLOCKSIZE;
+				}
+				////console.log('formed '+blocks.length + ' blocks');
+				for (var x = 0; x < blocks.length; x++){
+					////console.log('block['+x +']:'+blocks[x].metaIdList.length + ' items');
+				}
+
+				$scope.isLoading = true;
+
+				$scope.compareData(blocks, function(){
+						//////console.log('load for compareData finished');
+						$scope.isLoading = false;
+						clearMessage();
+						hide();
+						////console.log('new:'+$scope.newCompList.length);
+						////console.log('with conflicts:'+$scope.componentList.length);
+						////console.log('not to commit:'+$scope.notMergeCompList.length);
+				});
+				
+				function getSubMap(list){
+					var crcMap = {};
+					if (list != undefined && list.length > 0){
+						for (var x = 0; x < list.length; x++){
+							crcMap[list[x]] = metaCrcMap[list[x]];
+						} 
+					}
+					return crcMap;
+				}	
+				
+			}
+			
+			
+            /************************			Init section				****************************/    
+
+			// init the variables for controller
+			$scope.initialize = function(){
+				$scope.attIdMap = {};
+				$scope.globalAttIdMap = {};
+				$scope.componentBaseList = [];
+				$scope.componentListPtr = [];
+				$scope.typeFilter = 'all';
+				$scope.searchText = '';
+				var element = document.getElementById('pg:fullform:FirstPageBlock:pbs1:pbsi1:picklst1');
+				if (element != undefined){
+					element.value = 'all';
+				}
+			
+				if ($scope.isLoading == false){
+					setMessageOnPage('Loading Data...');
+					$scope.isLoading = true;
+				
+					dataManager.getAllItems().then(
+    	                function (data) {
+    	                  if (data != null && data != undefined && data.length > 0){
+    	                  		////console.log('got items:'+data.length);
+    	                  		// split all data in blocks
+    	                  		var blocks = [];
+    	                  		var first = 0;
+    	                  		var end = 10000;
+    	                  		while (first < data.length){
+    	                  			if (end > data.length){
+    	                  				end = data.length;
+    	                  			}
+    	                  			blocks.push(data.slice(first,end));
+    	                  			first = end;
+    	                  			end += 10000;
+    	                  		}
+								$scope.loadData(blocks,function(){
+									//////console.log('load finished');
+									$scope.isLoading = false;
+									correctDate($scope.componentBaseList);
+									setAll($scope.componentBaseList,false);
+									$scope.applyFilter();
+									clearMessage();
+								});
+								
+    	                  }else{
+    	                  	setMessageOnPage('Nothing to commit');
+    	                  }	
+        	            },
+            	        function (error) {
+            				showErrorMessage('Error:'+error);
+            				$scope.isLoading = false;
+                    	}
+					);
+				
+				}
+			}
+			$scope.initialize();
+			
+			
+			
+			$scope.applyFilter = function(){
+				if ($scope.typeFilter == 'all'){
+					var lst  = [];
+					for ( var x = 0; x < $scope.componentBaseList.length; x++){
+						lst.push($scope.componentBaseList[x]);
+					}
+					$scope.componentListPtr = lst;
+				}else if ($scope.typeFilter != '' && $scope.typeFilter != undefined){
+					var lst = [];
+					for ( var x = 0; x < $scope.componentBaseList.length; x++){
+						var elem = $scope.componentBaseList[x];
+						if (elem.compType == $scope.typeFilter){
+							lst.push(elem);
+						}
+					}
+					$scope.componentListPtr = lst;
+				}
+				////////console.log('size:'+lst.length);
+				$scope.$apply();
+			}
+            
+        	
+        });
+        
+        
+          function clearMessage(){
+    		////////console.log('clearMessage');
+//    		setMessageOnPage('');
+	        if($j('#msg') != undefined){
+	             $j('#msg').remove();
+    	    }
+    }
+    
+        
+    function unbindWindow()
+    {
+        $j(window).unbind();
+    }
+    
+    function isEmpty(val){
+    	return val == undefined || val == null || val == '';
+    }
+        
+		
+		function getScope(){
+    		return angular.element(document.getElementById('angularControllerId')).scope();
+    	}
+		
+		
+				// analyse and return bundle's crc32 sum (see the specs for detail)
+		function composeBundleCrc(componentStack){
+			var mapComp = {'.cmp':'', '.cmp-meta.xml':'' ,'Controller.js':'','Helper.js':'','.css':'','.auradoc':'','Renderer.js':'','.design':'','.svg':''};
+            var crcCode = '';
+                                                                
+			for (var i = 0; i < componentStack.length; i++){
+                 var zipFileName = componentStack[i].compName;
+                 if(zipFileName != undefined)
+                 {
+          			var index = getBundleExt(zipFileName);
+                    if (index > -1){
+        	          	var ext = zipFileName.substr(index)
+    	                mapComp[ext] = componentStack[i].crc32;
+	                    //debug('unzipped:'+zipFileName);
+                    }
+                 }
+             }
+             crcCode = mapComp['.cmp']+','+mapComp['.cmp-meta.xml']+','+mapComp['Controller.js']+','+mapComp['Helper.js']+
+                                      ','+mapComp['.css']+','+mapComp['.auradoc']+','+mapComp['Renderer.js']+','+mapComp['.design']+','+mapComp['.svg'];
+             //debug('crc:'+crcCode);
+             return crcCode;
+		}
+		
+		function getBundleExt(str){
+        	var index = str.lastIndexOf('.js');
+        	if (index > -1){// verify 3 exts
+        		index = str.lastIndexOf('Controller.js');
+        		if (index == -1){
+	        		index = str.lastIndexOf('Helper.js');
+			   		if (index == -1){
+	        			index = str.lastIndexOf('Renderer.js');
+       				}
+        		}
+        		return index;
+        	}
+        	index = str.lastIndexOf('.cmp-meta.xml');
+        	if (index == -1){
+        		return str.lastIndexOf('.');
+        	}
+        	return index;
+        }
+        
+        
+        var Page = function(obj){
+             	//////////console.log('creating a page')
+            	this.staticLimit = 20;
+                this.orderByColumn = 'compName';
+            	this.isReverse = false;
+            	this.metaOffSet = 0;
+            	this.totalRecords = 0;
+            	this.viewLimit = this.staticLimit;
+        		if (obj != undefined){
+        			if (obj.OrderByColumn != undefined){ this.orderByColumn = obj.OrderByColumn;}
+        			if (obj.isReverse != undefined){ this.isReverse = obj.isReverse;}
+        			if (obj.metaOffSet != undefined){ this.metaOffSet = obj.metaOffSet;}
+        			if (obj.totalRecords != undefined){ this.totalRecords = obj.totalRecords;}
+        			if (obj.viewLimit != undefined){ this.viewLimit = obj.viewLimit;}
+        		}
+		}
+		    
+            Page.prototype.refreshOrderBy = function(orderVal) {
+                this.metaOffSet = 0;
+                this.viewLimit = this.metaOffSet + this.staticLimit;
+                if(orderVal === this.orderByColumn)
+                    this.isReverse = !this.isReverse;
+                else
+                {
+                    this.isReverse = false;
+                    this.orderByColumn = orderVal;
+                }
+            };
+            Page.prototype.showFirst = function() {
+                this.metaOffSet = 0;
+                this.viewLimit = this.staticLimit;
+            };
+            Page.prototype.listPrevious = function() {
+                this.metaOffSet = this.metaOffSet - this.staticLimit;
+                if(this.metaOffSet < 0)
+                    this.metaOffSet = 0;
+                this.viewLimit = this.metaOffSet + this.staticLimit;
+            };
+            Page.prototype.listNext = function(tempTotal) {
+                if((this.metaOffSet + this.staticLimit) < tempTotal)
+                {
+                    this.metaOffSet = this.metaOffSet + this.staticLimit;
+                    this.viewLimit = this.metaOffSet + this.staticLimit;
+                }
+            };
+            Page.prototype.showLast = function(tempTotal) {
+                this.metaOffSet = tempTotal - (tempTotal % this.staticLimit);
+                if(this.metaOffSet == tempTotal && this.metaOffSet != 0)
+                {
+                    this.metaOffSet = tempTotal - this.staticLimit;
+                }
+                this.viewLimit = this.metaOffSet + this.staticLimit;
+            };
+            Page.prototype.isPrevious = function() {
+                if(this.metaOffSet < 1) 
+                    return true;
+                else {
+                    return false;
+                }
+            };
+            Page.prototype.isNext = function(tempTotal){
+                if(tempTotal > this.metaOffSet+this.staticLimit){
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            };
+            Page.prototype.totalPageCount = function(tempTotal){
+                var totalPage = parseInt(tempTotal % this.staticLimit > 0 ? (tempTotal / this.staticLimit)+1 : (tempTotal / this.staticLimit));
+                return totalPage;
+                
+            };
+            Page.prototype.currentPageNo = function(tempTotal){
+                var currentPage = 1;
+                var total = this.totalPageCount(tempTotal);
+                ////////console.log('total='+total);
+                if(this.metaOffSet <  this.staticLimit){
+                    currentPage =  1;
+                }else{
+                    currentPage = Math.ceil(this.metaOffSet / this.staticLimit)+1;
+                }
+                if (currentPage > total){
+                	currentPage = 1;
+                	this.showFirst();
+                }
+                return currentPage;
+            };
+ 
+		
+		
+		function unpack(data, action){
+			if (data != undefined && action == true){
+				return pako.inflate(data,{ to: 'string' });
+			}else{
+				return data;
+			}
+		}
+
+		function finalCommit(commitSuccess,buildId,branchIdInput) {
+		
+			commitIds = [];// summary list of ids of metaitems to commit
+			var commitArray = getScope().getCommitSet();
+			commitIds = commitIds.concat(commitArray);
+			buildLogId = buildId;
+            branchId = branchIdInput;
+			
+			////console.log('commitSuccess');
+			////console.log('commitIds:'+commitIds.length + ' items');
+			////console.log('buildLogId'+buildLogId);
+			////console.log('branchId'+branchId);
+			
+			if (commitIds.length == 0){
+				showErrorMessage('Error: select at least  1 component to commit');
+				hide();
+				return;
+			}
+		
+            if(commitSuccess == true || commitSuccess == 'true')
+			{
+				ComponentAttachmentWraperList = [];
+				bodySize = 0;
+				componentMetaMap = {};
+				metaIds = [];
+                fileIndex = 0;
+                currentIndex = 0;
+                branchId = branchIdInput;
+                metafound = false;
+                updateProfiles();
+			}
+			else
+			{
+				hide();
+			}
+		}
+		
+		var purge;
+		
+		function updateProfiles(){
+			
+			var itemsToCommit = [];
+			for (var x = 0; x < commitIds.length; x++){
+				if (metaFoundMap[commitIds[x]] != undefined)
+					itemsToCommit.push(metaFoundMap[commitIds[x]]);
+			}
+			////console.log('to commit: '+itemsToCommit.length);
+			purge = new Validator(itemsToCommit,dataCache);
+//			purge.updateProfiles(function(){
+				////console.log('purge init');
+	            proccesFiles();
+//			});
+		}
+		
+   var Validator = function(items,cache){
+        ////console.log('call Validator');
+        this.ACT_STR = 'Activity.';
+        this.callback;
+        this.validNames = 0;
+        this.pIndex = 0;
+        this.dataCache = {};
+        if (cache != undefined){
+        	this.dataCache = cache;
+        }
+		this.profileList = [];
+        this.errors = [];
+		this.isValidationNeeded = false;//set flag always purge
+    	this.validName = {
+			'ApexClass': [], 
+			'CustomObject': [], 
+			'ApexPage':[], 
+			'CustomTab': [],
+			'Layout': [],
+			'CustomApplication':[],
+			'ExternalDataSource':[],
+			'CustomPermission':[],
+			'CustomField':[],
+			'RecordType':[]
+		};
+		
+		if (items != undefined && items.length > 0){
+			for (var x = 0; x < items.length; x ++){
+				var item = items[x];
+				if (item.MetaType == 'Profile' || item.MetaType == 'PermissionSet'){
+					this.profileList.push(item.key);	
+				}else{
+					this.addValidName(item.MetaType, item.API_Name);
+					this.isValidationNeeded == true;
+				}
+			}
+			////console.log('added valid names:'+this.validNames);
+//			if (this.isValidationNeeded == false)
+//			this.isValidationNeeded = this.profileList.length > 0;// if no profiles do nothing
+		}
+
+    }
+    
+
+
+Validator.prototype.addValidName = function(metaType,itemName) {
+	if (this.validName[metaType] != undefined && itemName != undefined) {
+		this.isValidationNeeded = true;
+		this.validName[metaType].push(itemName);
+		this.validNames ++;
+		var itemFullName = itemName;
+		//Activity custom fields to Event and Task
+		if(metaType == 'CustomField' && itemFullName.indexOf(this.ACT_STR) == 0 && itemFullName.lastIndexOf('__c') == itemFullName.length - 3) {
+		    var tempItemName = itemFullName.substring(this.ACT_STR.length,itemFullName.length);
+		    this.validName[metaType].push('Task.' + tempItemName);
+		    this.validName[metaType].push('Event.' + tempItemName);
+			this.validNames += 2;
+		}
+	}
+}
+
+Validator.prototype.updateProfiles = function(callback) {
+	var self = this;
+	if (callback != undefined){
+		this.callback = callback;
+		if (this.isValidationNeeded == false){
+			this.callback();	
+			return;
+		}
+	}
+	if (this.profileList.length > 0){
+		var key = this.profileList.shift();
+		////////console.log('process '+key);
+		//////////console.log('keys '+JSON.stringify(Object.keys(this.fileMap)));
+		var f = this.fileMap[key];
+		if (f != undefined && f.data != undefined){
+			////////console.log('updateOneProfile');
+			this.updateOneProfile(unpack(f.data,true), key,function(){
+				self.updateProfiles();
+			});
+		}else{//omit it
+			////////console.log('profile is absent');
+			this.errors.push('profile is absent');
+			this.updateProfiles();
+		}
+	}else{
+		if (this.callback != undefined){
+			this.callback();
+		}
+	}
+}
+
+Validator.prototype.updateCachedProfile = function(p, callback) {
+	var self = this;
+	if (callback != undefined){
+		this.callback = callback;
+		if (this.isValidationNeeded == false){
+			this.callback();	
+			return;
+		}
+	}
+	if (p != undefined){
+		this.updateOneProfile(p, '0',function(result){
+				self.callback(result);
+		});
+	}else{
+		this.callback();
+	}
+}
+
+Validator.prototype.updateOneProfile = function(objectForValidation, keyToUpdate, callback) {
+
+			////console.log('start size '+JSON.stringify(objectForValidation).length);
+
+			var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false, escapeMode: true});
+			var orignal = x2js.xml_str2json(objectForValidation);
+			var ObjectForVal;
+			if (orignal.Profile != undefined) {
+				ObjectForVal = orignal.Profile;
+			}
+			else if (orignal.PermissionSet != undefined) {
+				ObjectForVal = orignal.PermissionSet;
+			}
+			if (ObjectForVal != null) {
+				//APEX CLASS
+				if (ObjectForVal.classAccesses != undefined) {
+					var NewArr =[];
+					var EtallonClasses = this.validName.ApexClass;
+					if(Array.isArray(ObjectForVal.classAccesses))	
+					{
+						for(var index in ObjectForVal.classAccesses) {
+							if (jQuery.inArray(ObjectForVal.classAccesses[index].apexClass, EtallonClasses) !== -1) {
+								NewArr.push(ObjectForVal.classAccesses[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.classAccesses.apexClass, EtallonClasses) !== -1) {
+							NewArr.push(ObjectForVal.classAccesses);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.classAccesses = NewArr;
+					}
+					else {
+						delete ObjectForVal.classAccesses;
+					}
+				}
+
+				//APEX PAGE
+				if (ObjectForVal.pageAccesses != undefined) {
+					var NewArr =[];
+					var EtallonPages = this.validName.ApexPage;
+					if(Array.isArray(ObjectForVal.pageAccesses))	
+					{
+						for(var index in ObjectForVal.pageAccesses) {
+							if (jQuery.inArray(ObjectForVal.pageAccesses[index].apexPage, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.pageAccesses[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.pageAccesses.apexPage, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.pageAccesses);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.pageAccesses = NewArr;
+					}
+					else {
+						delete ObjectForVal.pageAccesses;
+					}
+				}
+
+				//TAB permision
+				if (ObjectForVal.tabSettings != undefined && orignal.PermissionSet != undefined) {
+					var NewArr =[];
+					var EtallonTab = this.validName.CustomTab;
+					if(Array.isArray(ObjectForVal.tabSettings))	
+					{
+						for(var index in ObjectForVal.tabSettings) {
+							if (jQuery.inArray(ObjectForVal.tabSettings[index].tab, EtallonTab) !== -1) {
+								NewArr.push(ObjectForVal.tabSettings[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.tabSettings.tab, EtallonTab) !== -1) {
+							NewArr.push(ObjectForVal.tabSettings);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.tabSettings = NewArr;
+					}
+					else {
+						delete ObjectForVal.tabSettings;
+					}
+				}
+
+
+				//TAB Profile
+				if (ObjectForVal.tabVisibilities != undefined && orignal.Profile != undefined) {
+					var NewArr =[];
+					var EtallonTab = this.validName.CustomTab;
+					if(Array.isArray(ObjectForVal.tabVisibilities))	
+					{
+						for(var index in ObjectForVal.tabVisibilities) {
+							if (jQuery.inArray(ObjectForVal.tabVisibilities[index].tab, EtallonTab) !== -1) {
+								NewArr.push(ObjectForVal.tabVisibilities[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.tabVisibilities.tab, EtallonTab) !== -1) {
+							NewArr.push(ObjectForVal.tabVisibilities);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.tabVisibilities = NewArr;
+					}
+					else {
+						delete ObjectForVal.tabVisibilities;
+					}
+				}
+
+				//OBJECT
+				if (ObjectForVal.objectPermissions != undefined) {
+					var NewArr =[];
+					var EtallonObject = this.validName.CustomObject;
+					if(Array.isArray(ObjectForVal.objectPermissions))	
+					{
+						for(var index in ObjectForVal.objectPermissions) {
+							if (jQuery.inArray(ObjectForVal.objectPermissions[index].object, EtallonObject) !== -1) {
+								NewArr.push(ObjectForVal.objectPermissions[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.objectPermissions.object, EtallonObject) !== -1) {
+							NewArr.push(ObjectForVal.objectPermissions);
+						}
+					}
+					
+					if (NewArr.length > 0) {
+						ObjectForVal.objectPermissions = NewArr;
+					}
+					else {
+						delete ObjectForVal.objectPermissions;
+					}
+				}
+
+				//Layout
+				if (ObjectForVal.layoutAssignments != undefined) {
+					var NewArr =[];
+					var EtallonLauout = this.validName.Layout;
+					if(Array.isArray(ObjectForVal.layoutAssignments))	
+					{
+						for(var index in ObjectForVal.layoutAssignments) {
+							if (jQuery.inArray(ObjectForVal.layoutAssignments[index].layout, EtallonLauout) !== -1) {
+								if(ObjectForVal.layoutAssignments[index].recordType != undefined) {
+									var RecordTypesAvailLi = this.validName.RecordType;
+									if (jQuery.inArray(ObjectForVal.layoutAssignments[index].recordType, RecordTypesAvailLi) !== -1) {
+										NewArr.push(ObjectForVal.layoutAssignments[index]);
+									}
+								}
+								else {
+									NewArr.push(ObjectForVal.layoutAssignments[index]);
+								}
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.layoutAssignments.layout, EtallonLauout) !== -1) {
+								//NewArr.push(ObjectForVal.layoutAssignments);
+							if(ObjectForVal.layoutAssignments.recordType != undefined) {
+								var RecordTypesAvailLi = this.validName.RecordType;
+								if (jQuery.inArray(ObjectForVal.layoutAssignments.recordType, RecordTypesAvailLi) !== -1) {
+									NewArr.push(ObjectForVal.layoutAssignments);
+								}
+							}
+							else {
+								NewArr.push(ObjectForVal.layoutAssignments);
+							}
+						}
+					}
+					
+					if (NewArr.length > 0) {
+						ObjectForVal.layoutAssignments = NewArr;
+					}
+					else {
+						delete ObjectForVal.layoutAssignments;
+					}
+				}
+
+				//recordType
+				if (ObjectForVal.recordTypeVisibilities != undefined) {
+					var NewArr =[];
+					var EtallonObject = this.validName.RecordType;
+					if (EtallonObject.length > 0) {
+						if(Array.isArray(ObjectForVal.recordTypeVisibilities))	
+						{
+							for(var index =0; index < ObjectForVal.recordTypeVisibilities.length; index++) {
+								var RecordTypeName = ObjectForVal.recordTypeVisibilities[index].recordType; 
+								if (jQuery.inArray(RecordTypeName, EtallonObject) !== -1) {
+									NewArr.push(ObjectForVal.recordTypeVisibilities[index]);
+								}
+							}
+						}
+						else
+						{
+							var RecordTypeName = ObjectForVal.recordTypeVisibilities.recordType;
+							if (jQuery.inArray(RecordTypeName, EtallonObject) !== -1) {
+								NewArr.push(ObjectForVal.recordTypeVisibilities);
+							}
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.recordTypeVisibilities = NewArr;
+					}
+					else {
+						delete ObjectForVal.recordTypeVisibilities;
+					}
+				}
+
+				//fieldPermissions
+				if (ObjectForVal.fieldPermissions != undefined) {
+					var NewArr =[];
+					var EtallonObject = this.validName.CustomField;
+					if (EtallonObject.length > 0) {
+						if(Array.isArray(ObjectForVal.fieldPermissions))	
+						{
+							for(var index =0; index < ObjectForVal.fieldPermissions.length; index++) {
+								var fieldName = ObjectForVal.fieldPermissions[index].field;
+								if (jQuery.inArray(fieldName, EtallonObject) !== -1) {
+									NewArr.push(ObjectForVal.fieldPermissions[index]);
+								}
+							}
+						}
+						else
+						{
+							var fieldName = ObjectForVal.fieldPermissions.field;
+							if (jQuery.inArray(fieldName, EtallonObject) !== -1) {
+								NewArr.push(ObjectForVal.fieldPermissions);
+							}
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.fieldPermissions = NewArr;
+					}
+					else {
+						delete ObjectForVal.fieldPermissions;
+					}
+				}
+				
+				//applicationVisibilities
+				if (ObjectForVal.applicationVisibilities != undefined) {
+					var NewArr =[];
+					var EtallonPages = this.validName.CustomApplication;
+					if(Array.isArray(ObjectForVal.applicationVisibilities))	
+					{
+						for(var index in ObjectForVal.applicationVisibilities) {
+							if (jQuery.inArray(ObjectForVal.applicationVisibilities[index].application, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.applicationVisibilities[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.applicationVisibilities.application, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.applicationVisibilities);
+						}
+					}
+					
+					if (NewArr.length > 0) {
+						ObjectForVal.applicationVisibilities = NewArr;
+					}
+					else {
+						delete ObjectForVal.applicationVisibilities;
+					}
+				}
+				
+				//externalDataSourceAccesses
+				if (ObjectForVal.externalDataSourceAccesses != undefined) {
+					var NewArr =[];
+					var EtallonPages = this.validName.ExternalDataSource;
+					if(Array.isArray(ObjectForVal.externalDataSourceAccesses))	{
+						for(var index in ObjectForVal.externalDataSourceAccesses) {
+							if (jQuery.inArray(ObjectForVal.externalDataSourceAccesses[index].externalDataSource, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.externalDataSourceAccesses[index]);
+							}
+						}
+					}
+					else {
+						if (jQuery.inArray(ObjectForVal.externalDataSourceAccesses.externalDataSource, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.externalDataSourceAccesses);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.externalDataSourceAccesses = NewArr;
+					}
+					else {
+						delete ObjectForVal.externalDataSourceAccesses;
+					}
+				}
+				
+				//customPermissions
+				if (ObjectForVal.customPermissions != undefined) {
+					var NewArr =[];
+					var EtallonPages = this.validName.CustomPermission;
+					if(Array.isArray(ObjectForVal.customPermissions))	
+					{
+						for(var index in ObjectForVal.customPermissions) {
+							if (jQuery.inArray(ObjectForVal.customPermissions[index].name, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.customPermissions[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.customPermissions.name, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.customPermissions);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.customPermissions = NewArr;
+					}
+					else {
+						delete ObjectForVal.customPermissions;
+					}
+				}
+			}
+			if(ObjectForVal != null && ObjectForVal.userPermissions != undefined)
+				delete ObjectForVal.userPermissions;
+			if(ObjectForVal != null && ObjectForVal.loginIpRanges != undefined)
+    			delete ObjectForVal.loginIpRanges;
+			if (orignal.Profile != undefined && ObjectForVal != null) {
+				 orignal.Profile = ObjectForVal;
+			}
+			else if (orignal.PermissionSet != undefined && ObjectForVal != null) {
+				orignal.PermissionSet = ObjectForVal;
+			}
+            
+            var returnXML = x2js.json2xml_str(orignal);
+            ////console.log('size after purge:'+ ((returnXML == undefined)? 0 : returnXML.length));
+            ////console.log('after purge:'+returnXML);
+            if (keyToUpdate != '0'){
+				this.fileMap[keyToUpdate].data = pako.deflate(returnXML, { to: 'string' });
+				callback();
+			}else{
+				callback(returnXML);
+			}
+		}
+
+		// used to repack all data into componentMetaMap
+		function proccesFiles()
+		{
+			//return;
+			////console.log('process files');
+			////console.log('fileIndex '+fileIndex);
+			var profile;
+            if(metaFoundMap[commitIds[fileIndex]] != undefined)
+            {
+                var isDeployNeeded = false;
+                var item = metaFoundMap[commitIds[fileIndex]];
+				//console.log('process item'+JSON.stringify(item));
+                var fileZip = new JSZip();
+                if(bundleTypes[item.MetaType] != undefined)
+                {
+                	var auraMap = auraFileMap[item.File_Name];
+					//////console.log('process auar '+JSON.stringify(auraMap));
+                	if (auraMap != undefined){
+	                	for(var fName in auraMap)
+						{
+							fileZip.file(fName,unpack(auraMap[fName].data),{binary:true});
+						}
+                	}
+                    auraFileMap[item.File_Name] = null;
+                }
+                else
+                {
+	                if(fileMap[item.key+"-meta.xml"] != undefined)
+	                {
+	                    fileZip.file(item.File_Name+"-meta.xml",unpack(fileMap[item.key+"-meta.xml"].data),{binary:true});
+	                    fileMap[item.key+"-meta.xml"] = {};
+	                }
+	                if (item.MetaType == 'Profile' || item.MetaType == 'PermissionSet'){
+	                	profile = fileMap[item.key].data;
+	                	fileZip.file(item.File_Name,unpack(profile,true),{binary:true});
+	                }else if (mmap[item.MetaType] == undefined){
+	                	fileZip.file(item.File_Name,unpack(fileMap[item.key].data),{binary:true});
+	                }else{//inner components
+	                	fileZip.file(item.File_Name,unpack(fileMap[item.key].data),{binary:false});
+	                }
+	                fileMap[item.key] = {};
+                }
+                item.data = fileZip.generate({type:"base64",compression:"DEFLATE"});
+                fileZip = new JSZip();
+                if(item.data.length + bodySize > 2500000 || currentIndex > 500)
+                {
+                    if(isMapNonEmpty(componentMetaMap))
+                    {
+                        var commitObj = new Object();
+                        commitObj.dataMap = componentMetaMap;
+                        commitObj.metaIds = metaIds;
+                        ComponentAttachmentWraperList.push(commitObj);
+                        bodySize = 0;
+                        componentMetaMap = {};
+                        metaIds = [];
+                        isDeployNeeded = true;
+                        currentIndex = 0;
+                    }
+                }
+                bodySize  = bodySize + item.data.length;
+                var newObj = new Object();
+                newObj.data=item.data;
+                newObj.crc32=item.crc32;
+                newObj.filename=item.File_Name;
+                componentMetaMap[item.MetaType+'#'+item.API_Name] = newObj;
+                metaIds.push(commitIds[fileIndex]);
+                metaFoundMap[commitIds[fileIndex]] = {};
+                currentIndex ++;
+				//console.log('process newObj'+JSON.stringify(newObj));
+            }
+            else
+            {
+                //////console.log('Item not found in zip.');
+            }
+            
+            fileIndex ++;
+            if (commitIds.length > fileIndex && isDeployNeeded == false) {
+            	setTimeout(function(){
+                	proccesFiles();
+                });
+            }else{
+             	finishCommit();
+            }
+		}
+		
+		function finishCommit() 
+		{
+			////console.log('finishCommit:commitIds'+commitIds.length);
+            if(commitIds.length <= fileIndex && isMapNonEmpty(componentMetaMap))
+            {
+                var commitObj = new Object();
+                commitObj.dataMap = componentMetaMap;
+                commitObj.metaIds = metaIds;
+                ComponentAttachmentWraperList.push(commitObj);
+                componentMetaMap = {};
+            }
+            ////console.log('ComponentAttachmentWraperList:'+ComponentAttachmentWraperList.length);
+            if(ComponentAttachmentWraperList.length > 0)
+            {
+                commitInChunks();
+            }
+            else
+            {
+                showMessage('No metadata items found.');
+            }
+        }
+
+		function commitInChunks()
+		{
+			////console.log('commitInChunks ');
+			setMessageOnPage('Committed '+ fileIndex + '/' + commitIds.length + ' components');
+			
+			//////console.log('ComponentAttachmentWraperList:size '+ComponentAttachmentWraperList.length);
+			if (ComponentAttachmentWraperList.length > 0){
+				var commitObj = ComponentAttachmentWraperList[0];
+				////console.log('commitObj:' + JSON.stringify(commitObj).length + 'bytes');
+				commitByApex(JSON.stringify(commitObj));
+			}else{
+                if (commitIds.length > fileIndex){
+                    proccesFiles();
+                }else{
+					buildZips();
+                }
+			}
+		}
+		
+		var patchIdList = [];
+		var currentPatch;
+		var currentPatchBkup;
+		var CIOn = false;
+		var logIdList = [];
+		var currentLog;
+		
+		function populatePatch(patchIdLi, logIdLi, logId, validateOnly){
+			////console.log('patchIdLi, '+patchIdLi);
+			////console.log('logIdLi, '+logIdLi);// id of tracking metadata log for each org
+			////console.log('logId, '+logId);// transaction id
+			CIOn = false;// if  false (some deploy params invalid) then do not create deploy zip 
+			if (patchIdLi != undefined && patchIdLi != '' && logIdLi != undefined && logIdLi != '' && logId != undefined && logId != ''){
+				patchIdList = JSON.parse(patchIdLi);
+				logIdList = JSON.parse(logIdLi);
+				CIOn = true;
+			}
+			
+			if (CIOn == false){//no patches were created
+				// go next chunk
+				if (ComponentAttachmentWraperList.length > 0){
+					ComponentAttachmentWraperList.shift();
+				}
+				commitInChunks();
+			}else{
+				if (patchIdList.length > 0){
+						currentPatch = patchIdList.shift();
+						////console.log('insert, '+currentPatch);
+						insertPatchManifest(currentPatch);
+				}else{// all patches populated, exec next step
+					updateDeployZipCache();
+				}
+			}
+		}
+
+		var SF_COLLECT_BKUP_INFO = '{!$RemoteAction.SnapshotToBranchCommitController.collectBackupInfo}';
+
+		function insertPatchBkup(validateOnly){
+			////console.log('insertPatchBkup, validateOnly='+validateOnly);
+			if (logIdList.length > 0){
+				currentLog = logIdList.shift();
+				if (validateOnly == true || validateOnly == 'true'){// do not create rollback if validation only set
+					updateDeployZipCache();
+				}else{// executed only on validateOnly = false
+					Visualforce.remoting.Manager.invokeAction(
+					        '{!$RemoteAction.SnapshotToBranchCommitController.setUpAuthentication}',
+					        currentLog,
+					        handleAuthInformation
+					    );
+				}
+			}else{
+				updateDeployZipCache();
+			}
+		}
+		
+		
+		function handleAuthInformation(r,e)
+		{
+		    if(e.status && r){
+		    	if (r.msg == ''){
+		    		var rollBack = new RollBackZip(r, currentLog, sessionId, SF_COLLECT_BKUP_INFO, currentPatchBkup);
+			    	rollBack.createRollBackZip(currentPatch, function(err){
+			    		// TODO: analyse error list and cancel some patches if needed
+				    	currentPatchBkup = rollBack.getBkup();
+			    		insertPatchBkup(false);// with false flag because  handleAuthInformation exec only in this condition
+		    		});
+		    	}else{
+		    		showMessage(r.msg);
+		    	}
+		    }else{
+		    	showMessage(e.message);
+		    }
+		}
+		
+		// put in global cache all necessary data
+		// base64, filename,compName,compType
+		var dataCache = {};// cache rep
+		var dataList = [];// cache keys as list
+		var dataCacheIndex = 0;// the lastest key to add
+		
+		function updateDeployZipCache(){
+			////console.log('calling composeDeployZip');
+			////console.log('buildLogId='+buildLogId);
+			//////console.log('ComponentAttachmentWraperList '+ComponentAttachmentWraperList.length);
+			
+			if (ComponentAttachmentWraperList.length > 0){
+			
+				// update cache only if all vars are valid
+				if (buildLogId != null && buildLogId != undefined){
+					var commitObj = ComponentAttachmentWraperList.shift();//drop old map
+					for(var key in commitObj.dataMap){
+						dataCache[key] = commitObj.dataMap[key].data;// add all b64 to cache
+						dataList.push(key);
+					}
+				}
+			}
+			commitInChunks();// close the cycle
+		}
+		
+		// compose and insert deployzip
+		// first - static resources (if exist)
+		// split by blocks in 2.5MB
+		function buildZips(){
+			////console.log('from ' + dataList.length + 'items');
+			dataCacheIndex = 0;
+			if (dataList.length > 0){
+				buildBlocks();
+			}else{
+				sync();
+			}
+		}
+		
+		function buildBlocks(){
+			var zipMap = {};
+			var mapSize = 0;
+			var counter = 0;
+			var keyList = [];
+			var dataMap = {};
+			var compMap = {};
+			var deployFilenamesMap = {};
+			
+			
+			var composeBlock = function(){
+				if (dataCacheIndex < dataList.length){
+					var key = dataList[dataCacheIndex];
+            		var base64 = dataCache[key];
+            		//console.log('compose block:'+key);
+                	
+                	if ((mapSize + base64.length) < 2500000 && counter < 9000){
+	                	mapSize += base64.length;
+	            		dataCacheIndex ++;// inc after get 1 zip
+	                	var zip = new JSZip(base64, {base64:true});
+    	        		delete dataCache[key];
+        	        	zipMap[key] = zip;
+            	    	var componentType = key.substr(0,key.indexOf('#'));
+	                
+ 		                for(var fileName in zip.files){
+	        	            if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined'){
+        	        	        if(mmap[componentType] == undefined){
+                	        	    if (compMap[key] == undefined){
+                	        	    	compMap[key] = [];
+                	        	    }
+			                		compMap[key].push(fileName);
+			                		if (deployFilenamesMap[fileName] == undefined){
+			                			deployFilenamesMap[fileName] = true;
+			                			counter ++;
+			                		}
+                    	    	}else{// this branch executed once (always)
+                	        	    if (compMap[key] == undefined){
+                	        	    	compMap[key] = [];
+                	        	    }
+			                		compMap[key].push(fileName);
+			                		counter ++;
+                        		}
+                    		}
+                		}
+                		keyList.push(key);
+                		setTimeout(function(){
+                			composeBlock();
+                		});
+                	}else{
+                		composeDeployZip(keyList, compMap, zipMap);
+                		deployFilenamesMap = {};
+                	}
+				}else{// all done
+					composeDeployZip(keyList,  compMap, zipMap);
+					deployFilenamesMap = {};
+				}
+			}
+			// end of definition
+			//////console.log('dataCacheIndex='+dataCacheIndex);
+			if (dataCacheIndex < dataList.length){
+				composeBlock();
+			}else{
+				sync();
+			}
+			
+		}
+
+		function sync(){
+		   	//////console.log('Commit done successfully ');
+          	//return;
+           	synchronize();
+           	showMessage('Commit done successfully.#confirm');
+		}		
+		
+		function composeDeployZip(keyList,  compMap, zipMap){
+			//console.log('calling composeDeployZip');
+			//////console.log('keyList '+JSON.stringify(keyList));
+			
+			if (keyList.length > 0){
+            	
+				// form package
+				var mainZip = {};
+				var blobs = {};
+                var packageXmlMap = {};
+                
+
+			var composePackage = function(list){
+				if (list.length == 0){// generate zip
+        	       var xmlData = packageXmlCreator(packageXmlMap);
+            	   mainZip[xmlName] = xmlData;
+            	   // generate a list of files to compress
+            	   var files = Object.keys(mainZip);
+
+				   packageZipFileCreator(blobs,files,mainZip);
+				}else{
+					var key = list.shift();
+                    var fileNames = compMap[key];
+                    //console.log('key='+key);
+                    //console.log('fileNames='+JSON.stringify(fileNames));
+                    var compType = key.substr(0,key.indexOf('#'));
+                    var compName = key.substr(key.indexOf('#')+1);
+                            
+                    var packageXmlLi = [];
+                    if(packageXmlMap[compType] != undefined){
+                         packageXmlLi = packageXmlMap[compType];
+                    }
+                    packageXmlLi.push(compName);
+                    packageXmlMap[compType] = packageXmlLi;
+                    
+                    if (compType == 'Profile' || compType == 'PermissionSet'){
+                       	var zip = zipMap[key];
+                       	if (zip != undefined){
+  	                    	var fileName = fileNames[0];
+                            var latestXML = zip.files[fileName].asBinary();
+                    	
+	                    	purge.updateCachedProfile(latestXML, function(endXml){
+    	                		if (endXml != undefined){
+    			                   	blobs[fileName] = true;// interpret as blobs
+        	    	        		mainZip[fileName] = endXml;
+                    			}
+								composePackage(list);
+    	               		});
+    	               	}
+                    	return;
+                    }
+
+                    if(mmap[compType]!= undefined){
+                    	var fileName = fileNames[0];
+                       	blobs[fileNames[0]] = true;// interpret as blobs
+	                    if(mainZip[fileName] != undefined){// case of inner components - 2nd and more times
+                            var oldXML = mainZip[fileName];
+                        	var zip = zipMap[key];
+                        	if (zip != undefined){
+	                            var latestXML = zip.files[fileName].asBinary();
+    	                        var tempName = ""+compName;
+        	                    if(tempName.lastIndexOf('.') > -1){
+            	                    tempName = tempName.slice(tempName.lastIndexOf('.')+1,tempName.length)
+                	            }
+                    	        var customXML = getChildPartXml(latestXML, fileName, tempName, oldXML, compType);//TODO - can be optimized
+                        	    mainZip[fileName] = customXML;
+                        	    //console.log('oldXML='+oldXML);
+                        	    //console.log('customXML='+customXML);
+                        	    //console.log('latestXML='+latestXML);
+                            }
+                        }else{
+                        	var zip = zipMap[key];
+                        	if (zip != undefined){
+                        		mainZip[fileName] = zip.files[fileName].asBinary();
+                        	}
+                        }
+                    }else if(bundleTypes[compType] != undefined){
+	                       var zip = zipMap[key];
+	                       if (zip != undefined){
+	                       	for (var f = 0; f < fileNames.length; f++){
+	                       		blobs[fileNames[f]] = true;
+	                       		mainZip[fileNames[f]] = zip.files[fileNames[f]].asBinary();
+	                       	}
+	                       }
+                    }else{
+	                       var zip = zipMap[key];
+	                       if (zip != undefined){
+	                       	 for(var x = 0; x < fileNames.length; x++){
+	                           	blobs[fileNames[x]] = true;// interpret as blobs
+                	        	mainZip[fileNames[x]] = zip.files[fileNames[x]].asBinary();
+	                       	 }
+                           }
+                    }
+                     
+					setTimeout(function(){
+						composePackage(list);
+					});
+				}
+			  }//end of definition for composePackage
+			  //////console.log('compose package from '+keyList.length +'items');
+			  composePackage(keyList);
+			}else{
+				//////console.log('warning:trying to build empty packages (keyList is empty)');
+				buildBlock();
+			}
+		}
+		
+		function isText(type){
+			return (type == 'Profile' || type == 'PermissionSet' || mmap[type] != undefined || parentMap[type] != undefined);
+		}
+		
+		function packageZipFileCreator(blobs,files,mainZip) {
+			var addIndex = 0;
+			var tempWriter;
+			
+			function nextFile() 
+			{
+				var name = files[addIndex];
+                var data = mainZip[name];
+                var objToRead;
+                if (blobs[name] == undefined){
+                	objToRead =  new zip.TextReader(data);
+                }else{
+                	objToRead = new zip.BlobReader(new Blob([str2bytes(data)]));
+                }   
+					tempWriter.add(name, objToRead, function() {
+						addIndex++;
+						delete mainZip[name];
+						if(addIndex < files.length){
+							nextFile();
+						}else{
+							tempWriter.close(function(base64Data) {
+			    				base64Data = base64Data.slice(base64Data.indexOf(';base64,') + 8);
+			    				////console.log('insertAtt,'+ base64Data.length + 'bytes');
+			    				//////console.log('currentPatch:'+ currentPatch);
+			    				
+							    insertAtt(base64Data,currentPatch);
+							    // go next
+			    			});
+						}
+					});
+			}
+			
+			function str2bytes (str) {
+				if (str == undefined) return new Uint8Array();  
+			    var bytes = new Uint8Array(str.length);
+   				for (var i=0; i<str.length; i++) {
+      				bytes[i] = str.charCodeAt(i);
+    			}
+    			return bytes;
+			}
+			
+
+			function createZipWriter() {
+                  zip.createWriter(new zip.Data64URIWriter(), function(writer2) {
+					tempWriter = writer2;
+					nextFile();
+				}, function(error) {
+					// onerror callback
+					////////////console.log('Error while creating single zip.');
+					////////////console.log(error);
+					////////////console.log(JSON.stringify(error));
+					if(error.message != undefined)
+					{
+						showMessage(error.message);
+					}
+					else
+					{
+						showMessage('Unknown error.');
+					}
+				});
+			}
+			createZipWriter();
+		}
+		
+	    function packageXmlCreator(packageXmlMap)
+    	{
+        	var xml = '<?xml version="1.0" encoding="UTF-8"?><Package xmlns="http://soap.sforce.com/2006/04/metadata">';
+	        for(var mType in packageXmlMap)
+    	    {
+        	    var packageXmlLi = [];
+            	packageXmlLi = packageXmlMap[mType];
+	            xml = xml + '<types>';
+    	        for(var index in packageXmlLi)
+        	    {
+            	    if(index < packageXmlLi.length)
+                	{
+                    	xml = xml + '<members>';
+	                    xml = xml + packageXmlLi[index];
+    	                xml = xml + '</members>';
+            	    }
+        	    }
+	            xml = xml + '<name>'+mType+'</name></types>';
+    	    }
+        	xml = xml + '<version>'+apiVersion+'</version></Package>';
+        	return xml;
+    	}
+    	
+    function getChildPartXml(newXml,fileName,itemName,oldXml,metaType)
+    {
+        var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false, escapeMode: true});
+        var tgtmap = {};
+        var srcjson = x2js.xml_str2json(newXml);
+        if(srcjson != null)
+        {
+            var srcitems;
+            if(metaType == 'CustomLabel')
+            {
+                var srcMetaItem = srcjson.CustomLabels;
+                srcitems = srcMetaItem.labels;
+            }
+            else if(metaType == 'CustomField')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.fields;
+            }
+            else if(metaType == 'ListView')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.listViews;
+            }
+            else if(metaType == 'CompactLayout')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.compactLayouts;
+            }
+            else if(metaType == 'WebLink')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.webLinks;
+            }
+            else if(metaType == 'RecordType')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.recordTypes;
+            }
+            else if(metaType == 'FieldSet')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.fieldSets;
+            }
+            else if(metaType == 'ValidationRule')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.validationRules;
+            }
+            else if(metaType == 'AssignmentRule')
+            {
+                var srcMetaItem = srcjson.AssignmentRules;
+                srcitems = srcMetaItem.assignmentRule;
+            }
+            else if(metaType == 'AutoResponseRule')
+            {
+                var srcMetaItem = srcjson.AutoResponseRules;
+                srcitems = srcMetaItem.autoResponseRule;
+            }
+            else if(metaType == 'WorkflowTask')
+            {
+                var srcMetaItem = srcjson.Workflow;
+                srcitems = srcMetaItem.tasks;
+            }
+            else if(metaType == 'WorkflowOutboundMessage')
+            {
+                var srcMetaItem = srcjson.Workflow;
+                srcitems = srcMetaItem.outboundMessages;
+            }
+            else if(metaType == 'WorkflowFieldUpdate')
+            {
+                var srcMetaItem = srcjson.Workflow;
+                srcitems = srcMetaItem.fieldUpdates;
+            }
+            else if(metaType == 'WorkflowKnowledgePublish')
+            {
+                var srcMetaItem = srcjson.Workflow;
+                srcitems = srcMetaItem.knowledgePublishes;
+            }
+            else if(metaType == 'WorkflowAlert')
+            {
+                var srcMetaItem = srcjson.Workflow;
+                srcitems = srcMetaItem.alerts;
+            }
+            else if( metaType == 'WorkflowRule')
+            {
+                var srcMetaItem = srcjson.Workflow;
+                srcitems = srcMetaItem.rules;
+            }
+            ////
+            else if(metaType == 'SharingCriteriaRule')
+            {
+                var srcMetaItem = srcjson.SharingRules;
+                srcitems = srcMetaItem.sharingCriteriaRules;
+            }
+            else if(metaType == 'SharingOwnerRule')
+            {
+                var srcMetaItem = srcjson.SharingRules;
+                srcitems = srcMetaItem.sharingOwnerRules;
+            }
+            else if(metaType == 'BusinessProcess')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.businessProcesses;
+            }
+            else if(metaType == 'SharingReason')
+            {
+                var srcMetaItem = srcjson.CustomObject;
+                srcitems = srcMetaItem.sharingReasons;
+            }
+            else if(metaType == 'EscalationRule')
+            {
+                var srcMetaItem = srcjson.EscalationRules;
+                srcitems = srcMetaItem.escalationRule;
+            }
+            else if(metaType == 'MatchingRule')    
+            {
+                var srcMetaItem = srcjson.MatchingRules;
+                srcitems = srcMetaItem.matchingRules;
+            }
+            else if(metaType == 'ManagedTopic')
+            {
+                var srcMetaItem = srcjson.ManagedTopics;
+                srcitems = srcMetaItem.ManagedTopic;
+            }
+            ////
+            if(srcitems != undefined)
+            {
+                if(srcitems.fullName == undefined)
+                {                   
+                    $.each(srcitems, function( i, v )
+                    {
+                        tgtmap[v.fullName] = JSON.stringify(v);
+                    });  
+                }
+                else
+                {
+                    tgtmap[srcitems.fullName] = JSON.stringify(srcitems);
+                }
+            }
+        }
+
+        if(tgtmap[itemName] != undefined)
+        {
+            tempJsn = x2js.xml_str2json(oldXml);
+            if(tempJsn != null)
+            {
+                var obje;
+                var templi;
+                var preMap = {};
+                if(metaType == 'CustomLabel')
+                {
+                    obje = tempJsn.CustomLabels;
+                    templi = obje.labels;
+                }
+                else if(metaType == 'CustomField')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.fields;
+                }
+                else if(metaType == 'ListView')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.listViews;
+                }
+                else if(metaType == 'CompactLayout')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.compactLayouts;
+                }
+                else if(metaType == 'WebLink')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.webLinks;
+                }
+                else if(metaType == 'RecordType')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.recordTypes;
+                }
+                else if(metaType == 'FieldSet')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.fieldSets;
+                }
+                else if(metaType == 'ValidationRule')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.validationRules;
+                }
+                else if(metaType == 'AssignmentRule')
+                {
+                    obje = tempJsn.AssignmentRules;
+                    templi = obje.assignmentRule;
+                }
+                else if(metaType == 'AutoResponseRule')
+                {
+                    obje = tempJsn.AutoResponseRules;
+                    templi = obje.autoResponseRule;
+                }
+                else if(metaType == 'WorkflowTask')
+                {
+                    obje = tempJsn.Workflow;
+                    templi = obje.tasks;
+                }
+                else if(metaType == 'WorkflowOutboundMessage')
+                {
+                    obje = tempJsn.Workflow;
+                    templi = obje.outboundMessages;
+                }
+                else if(metaType == 'WorkflowFieldUpdate')
+                {
+                    obje = tempJsn.Workflow;
+                    templi = obje.fieldUpdates;
+                }
+                else if(metaType == 'WorkflowKnowledgePublish')
+                {
+                    obje = tempJsn.Workflow;
+                    templi = obje.knowledgePublishes;
+                }
+                else if(metaType == 'WorkflowAlert')
+                {
+                    obje = tempJsn.Workflow;
+                    templi = obje.alerts;
+                }
+                else if(metaType == 'WorkflowRule')
+                {
+                    obje = tempJsn.Workflow;
+                    templi = obje.rules;
+                }
+                ////
+                else if(metaType == 'SharingCriteriaRule')
+                {
+                    obje = tempJsn.SharingRules;
+                    templi = obje.sharingCriteriaRules;
+                }
+                else if(metaType == 'SharingOwnerRule')
+                {
+                    obje = tempJsn.SharingRules;
+                    templi = obje.sharingOwnerRules;
+                }
+                else if(metaType == 'BusinessProcess')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.businessProcesses;
+                }
+                else if(metaType == 'SharingReason')
+                {
+                    obje = tempJsn.CustomObject;
+                    templi = obje.sharingReasons;
+                }
+                else if(metaType == 'EscalationRule')
+                {
+                    obje = tempJsn.EscalationRules;
+                    templi = obje.escalationRule;
+                }
+                else if(metaType == 'MatchingRule')    
+                {
+                    obje = tempJsn.MatchingRules;
+                    templi = obje.matchingRules;
+                }
+                else if(metaType == 'ManagedTopic')
+                {
+                    obje = tempJsn.ManagedTopics;
+                    templi = obje.ManagedTopic;
+                }
+                
+                ////
+                
+                if(templi != undefined)
+                {
+                    if(templi.fullName == undefined)
+                    {                   
+                        $.each(templi, function( i, v )
+                        {
+                            preMap[v.fullName] = JSON.stringify(v);
+                        });  
+                    }
+                    else
+                    {
+                        preMap[templi.fullName] = JSON.stringify(templi);
+                    }
+                }
+                preMap[itemName] = tgtmap[itemName];
+                updatedJsn = '[';
+                for(var name in preMap)
+                {
+                    if(updatedJsn == '[')
+                    {
+                        updatedJsn += preMap[name];
+                    }
+                    else
+                    {
+                        updatedJsn+=','+preMap[name];
+                    }
+                }
+                updatedJsn+=']';
+                if(metaType == 'CustomLabel')
+                {
+                    obje.labels = JSON.parse(updatedJsn);
+                    tempJsn.CustomLabels = obje;
+                }
+                else if(metaType == 'CustomField')
+                {
+                    obje.fields = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'ListView')
+                {
+                    obje.listViews = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'CompactLayout')
+                {
+                    obje.compactLayouts = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'WebLink')
+                {
+                    obje.webLinks = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'RecordType')
+                {
+                    obje.recordTypes = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'FieldSet')
+                {
+                    obje.fieldSets = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'ValidationRule')
+                {   
+                    obje.validationRules = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'AssignmentRule')
+                {       
+                    obje.assignmentRule = JSON.parse(updatedJsn);
+                    tempJsn.AssignmentRules = obje;
+                }
+                else if(metaType == 'AutoResponseRule')
+                {
+                    obje.autoResponseRule = JSON.parse(updatedJsn);
+                    tempJsn.AutoResponseRules = obje;
+                }
+                else if(metaType == 'WorkflowTask')
+                {
+                    obje.tasks = JSON.parse(updatedJsn);
+                    tempJsn.Workflow = obje;
+                }
+                else if(metaType == 'WorkflowOutboundMessage')
+                {
+                    obje.outboundMessages = JSON.parse(updatedJsn);
+                    tempJsn.Workflow = obje;
+                }
+                else if(metaType == 'WorkflowFieldUpdate')
+                {
+                    obje.fieldUpdates = JSON.parse(updatedJsn);
+                    tempJsn.Workflow = obje;
+                }
+                else if(metaType == 'WorkflowKnowledgePublish')
+                {
+                    obje.knowledgePublishes = JSON.parse(updatedJsn);
+                    tempJsn.Workflow = obje;
+                }
+                else if(metaType == 'WorkflowAlert')
+                {
+                    obje.alerts = JSON.parse(updatedJsn);
+                    tempJsn.Workflow = obje;
+                }
+                else if(metaType == 'WorkflowRule')
+                {
+                    obje.rules = JSON.parse(updatedJsn);
+                    tempJsn.Workflow = obje;
+                }
+                ////
+                else if(metaType == 'SharingCriteriaRule')
+                {
+                    obje.sharingCriteriaRules = JSON.parse(updatedJsn);
+                    tempJsn.SharingRules = obje;
+                }
+                else if(metaType == 'SharingOwnerRule')
+                {
+                    obje.sharingOwnerRules = JSON.parse(updatedJsn);
+                    tempJsn.SharingRules = obje;
+                }
+                else if(metaType == 'BusinessProcess')
+                {
+                    obje.businessProcesses = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'SharingReason')
+                {
+                    obje.sharingReasons = JSON.parse(updatedJsn);
+                    tempJsn.CustomObject = obje;
+                }
+                else if(metaType == 'EscalationRule')
+                {
+                    obje.escalationRule = JSON.parse(updatedJsn);
+                    tempJsn.EscalationRules = obje;
+                }
+                else if(metaType == 'MatchingRule')    
+                {
+                    obje.matchingRules = JSON.parse(updatedJsn);
+                    tempJsn.MatchingRules = obje;
+                }
+                else if(metaType == 'ManagedTopic')
+                {
+                    obje.ManagedTopic = JSON.parse(updatedJsn);
+                    tempJsn.ManagedTopics = obje;
+                }
+
+                oldXml = x2js.json2xml_str($.parseJSON(JSON.stringify(tempJsn)));
+                oldXml = '<?xml version="1.0" encoding="UTF-8"?>'+oldXml;
+            }
+        }
+        return oldXml;
+    }
+    	
+		
+		
+		function isMapNonEmpty(componentMetaMap)
+		{
+			if (componentMetaMap == undefined) return false;
+			for(var key in componentMetaMap){
+				return true;
+			}
+			return false;
+		}
+		
+		var branchRef = '';
+		var snapRef = '';
+		
+		function getCommitInformation(branchId,snapshotId,isSuccess, msg)
+		{
+			ComponentAttachmentWraperList = [];
+			attList = [];
+			fileMap = {};
+			metaItemList = [];
+			metaFoundMap = {};
+			
+			////console.log('getCommitInformation='+branchId);
+			////console.log('branchId='+branchId);
+			////console.log('snapshotId='+snapshotId);
+			////console.log('isSuccess='+isSuccess);
+			////console.log('msg='+msg);
+			branchRef = branchId;
+			snapRef = snapshotId;
+			
+			if (isSuccess == true || isSuccess == 'true'){
+				nSelected = getScope().initialSelectionSet0.length;
+				if (nSelected > 0){ 
+					setMessageOnPage('Please wait...');
+					////console.log('selected:'+nSelected);
+					getScope().secondStageCommit();
+					return; 
+				}else{
+					msg = 'Please select an item first.';
+				}
+			}
+			showErrorMessage(msg);
+			hide();		
+			return;
+		}
+		
+		function getSnapshotAttachmentsInfo(ids){
+			Visualforce.remoting.Manager.invokeAction(
+	        	'{!$RemoteAction.SnapshotToBranchCommitController.getSnapshotAttInfo}',
+	       		 JSON.stringify(ids),
+	       		 handleCommitInformation
+	        );
+		}
+		
+		function handleCommitInformation(r,e)
+		{
+			////console.log('handleCommitInformation='+JSON.stringify(r));
+		    if(e.status && r) 
+		    {
+		    	if(r.attList.length > 0)
+				{
+					attList = [];
+					var bodySize = 0;
+					var temp = [];
+					for(var i in r.attList)
+					{
+						if(i< r.attList.length)
+						{
+							var att = r.attList[i];
+							if (att.Description != undefined && allCompTypeFilter[att.Description] != undefined){
+								if(bodySize+att.BodyLength > 2000000 && temp.length > 0) 
+								{
+									attList.push(temp);
+									bodySize = 0;
+									temp = [];
+								}
+								bodySize = bodySize+att.BodyLength;
+								temp.push(att.Id);
+							}
+						}
+					}
+					if(temp.length > 0)
+					{
+						attList.push(temp);
+					}
+					if(attList.length > 0)
+					{
+						var attSet = attList.shift();
+						////console.log('get attSet:'+attSet.length);
+						////console.log('get attachments:'+JSON.stringify(attSet));
+						Visualforce.remoting.Manager.invokeAction(
+					        '{!$RemoteAction.SnapshotToBranchCommitController.getAttachments}',
+					        JSON.stringify(attSet),
+					        handleAttachments
+					    );
+					}
+					else
+					{
+						showMessage('No attachments found.');
+					}
+				}
+				else
+				{
+					showMessage('No attachments found.');
+				}
+		    }
+		    else
+		    {
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function getAttachments()
+		{
+			if(attList.length > 0)
+			{
+				var attSet = attList.shift();	
+					Visualforce.remoting.Manager.invokeAction(
+			        '{!$RemoteAction.SnapshotToBranchCommitController.getAttachments}',
+			        JSON.stringify(attSet),
+			        handleAttachments
+			    ); 
+			}
+		}
+		
+		var left_to_resolve = 0;
+		
+		function handleAttachments(r,e)
+		{
+			if(e.status && r)
+		    {
+		    	////console.log('got array of attachments:'+ r.length);
+		    	var unpack = function(ar){
+		    		////console.log( ' call- '+ar.length );	
+		    		if(ar != undefined && ar.length > 0)
+		    		{
+		    			var arr = ar.shift();	
+			    		var componentType = arr.compType;
+			    		var zip = new JSZip(arr.base64, {base64:true});
+						////console.log(componentType+ ' call- ');
+						left_to_resolve ++;
+                        createFileMap(componentType, zip, function(res){
+                       		unpack(ar);
+                        });
+					}else{
+						next();
+					}
+		    	}
+                unpack(r);
+		    }
+		    else
+		    {
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function next(){
+		    	if(attList.length > 0)
+				{
+					getAttachments();
+				}else{
+					//////console.log('all loaded');
+					if(true)
+					{
+						getScope().updateMetaData();
+					}
+					else
+					{
+						showMessage('No metadata items found.');
+					}
+				}
+		}
+		
+		
+        
+        function isFiltered(type, filename){
+        	if (filename == undefined) return false;
+        	if (revFolderMap[type] == undefined){ 
+	        	if (filename.indexOf('-meta.xml') > -1){
+    	    		filename = filename.slice(0,filename.indexOf('-meta.xml'));
+        		}
+	       		return (allCompFilter[filename] != undefined);
+			}else{
+	        	if (filename.indexOf('-meta.xml') > -1){
+    	    		var filename2 = filename.slice(0,filename.indexOf('-meta.xml'));
+    	    		return (allCompFilter[filename] != undefined || allCompFilter[filename2] != undefined);
+        		}else{
+        			return (allCompFilter[filename] != undefined);
+        		}
+			}
+        }
+        
+        function getAuraName(name){// aura/Test => Test,  aura/TestOne/onessd => Test
+        	 if (name == undefined || name == '') return;
+        	 if (name.indexOf('aura/') < 0) return;
+        	 if (name.lastIndexOf('/') > 5 && name.lastIndexOf('/') != (name.length - 1)){
+        	 	var fullName = name.slice(0,name.lastIndexOf('/'));
+	        	////console.log(name + '=>' + fullName);
+	        	if (allCompFilter[fullName] != undefined){
+	        		return fullName;
+	        	}
+        	 }
+        	return;
+        }
+		
+		// one-thread function
+		function createFileMap(tempComponentType,tempZip,callback)
+		{
+	       	////console.log('createFileMap for'+tempComponentType);
+			if(tempComponentType == 'Profile' || tempComponentType == 'PermissionSet')
+			{
+				tempZip.remove('objects');
+                tempZip.remove('classes');
+                tempZip.remove('pages');
+                tempZip.remove('layouts');
+                tempZip.remove('tabs');
+                tempZip.remove('applications');
+                tempZip.remove('dataSources');
+                tempZip.remove('customPermissions');
+				for(var fileName in tempZip.files)
+				{
+					if (isFiltered(tempComponentType,fileName) == false) continue;
+					if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0)) 
+	            	{
+	            		var fileData = tempZip.files[fileName].asBinary();
+	            		if(fileMap[tempComponentType+"#"+fileName] != undefined)
+	            		{
+	            			if(tempComponentType == 'Profile')
+	            				fileData = profileJoinOneByOne(unpack(fileMap[tempComponentType+"#"+fileName].data,true),fileData);
+	            			else if(tempComponentType == 'PermissionSet')
+	            				fileData = permissionSetJoinOneByOne(unpack(fileMap[tempComponentType+"#"+fileName].data,true),fileData);
+	            		}
+	            		fileMap[tempComponentType+"#"+fileName] = getCrcWithData(fileData,{compress:true});// Profile or PermissionSet
+	            	}
+				}
+				joinThreads(callback);
+	   		}else if(bundleTypes[tempComponentType] != undefined){// process aura components
+     			for(var fileName in tempZip.files)
+				{
+					var name = getAuraName(fileName);
+					if (name == undefined) continue;
+					//name = tempComponentType + '#' + name;
+					var descriptor = Object(); 
+					if (auraFileMap[name] != undefined){
+						descriptor = auraFileMap[name];
+					}
+            		var fileData = tempZip.files[fileName].asBinary();
+            		descriptor[fileName] = getCrcWithData(fileData);// any (incl. apex cls,pages,etc) except inners
+					auraFileMap[name] = descriptor;
+				}
+				joinThreads(callback);
+			}else if(mmap[tempComponentType] == undefined){ 
+     			for(var fileName in tempZip.files)
+				{
+					if (isFiltered(tempComponentType,fileName) == false) continue;
+					if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+	            	{
+	            		var fileData = tempZip.files[fileName].asBinary();
+	            		fileMap[tempComponentType+"#"+fileName] = getCrcWithData(fileData);// any (incl. apex cls,pages,etc) except inners
+	            	}
+				}
+				joinThreads(callback);
+	   		}else{// process inner components
+	   			var fileList = [];
+     			for(var fileName in tempZip.files)
+				{
+					if (isFiltered(tempComponentType,fileName) == false) continue;
+					if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+	            	{
+	            		fileList.push(fileName);
+	            		getChildFileMap(tempComponentType,tempZip.files[fileName].asText(),fileName);//inner only
+	            	}
+				}
+				if (fileList.length > 0){
+					processInnerComponents(tempComponentType, fileList, tempZip.files, callback);
+				}else{
+					joinThreads(callback);
+				}
+			}
+		}
+
+   		// Joining threads, meaning that the callback only will
+   		// be performed when ALL parallel threads have executed
+   		function joinThreads(callback) {
+       		left_to_resolve--;
+	        if ((left_to_resolve == 0) && (callback !== null) && (callback != undefined)) {// call only if the thread is the last
+       		    callback();
+       		}
+   		}
+  
+		
+		function processInnerComponents(componentType, list, map, callback){
+			if (list.length == 0){
+				joinThreads(callback);
+			}else{
+				var fileName = list.shift();// get the 1st element
+				getChildFileMap(componentType,map[fileName].asText(),fileName);
+				setTimeout(function(){
+					 processInnerComponents(componentType, list, map, callback);
+				}, 5);
+			} 
+		}
+		
+		function getChildFileMap(metaType,xml,fileName)
+		{
+			var fullName = '';
+			if(metaType != 'CustomLabel')
+			{
+				fullName = fileName.slice(fileName.indexOf("/")+1,fileName.lastIndexOf('.'))+".";
+			}
+	
+	   		var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false, escapeMode: true});
+	   		var jsnMap ={};
+			var tempJSON = '';
+			var srcjson = x2js.xml_str2json(xml);
+			if(srcjson != undefined && srcjson != null)
+			{
+				var srcitems;
+				if(metaType == 'CustomLabel')
+				{
+					var srcMetaItem = srcjson.CustomLabels;
+					srcitems = srcMetaItem.labels;
+				}
+				else if(metaType == 'CustomField')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.fields;
+				}
+				else if(metaType == 'ListView')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.listViews;
+				}
+				else if(metaType == 'CompactLayout')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.compactLayouts;
+				}
+				else if(metaType == 'WebLink')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.webLinks;
+				}
+				else if(metaType == 'RecordType')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.recordTypes;
+				}
+				else if(metaType == 'FieldSet')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.fieldSets;
+				}
+				else if(metaType == 'ValidationRule')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.validationRules;
+				}
+				else if(metaType == 'AssignmentRule')
+				{
+					var srcMetaItem = srcjson.AssignmentRules;
+					srcitems = srcMetaItem.assignmentRule;
+				}
+				else if(metaType == 'AutoResponseRule')
+				{
+					var srcMetaItem = srcjson.AutoResponseRules;
+					srcitems = srcMetaItem.autoResponseRule;
+				}
+				else if(metaType == 'WorkflowTask')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.tasks;
+				}
+				else if(metaType == 'WorkflowOutboundMessage')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.outboundMessages;
+				}
+				else if(metaType == 'WorkflowFieldUpdate')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.fieldUpdates;
+				}
+				else if(metaType == 'WorkflowKnowledgePublish')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.knowledgePublishes;
+				}
+				else if(metaType == 'WorkflowAlert')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.alerts;
+				}
+				else if( metaType == 'WorkflowRule')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.rules;
+				}
+				else if(metaType == 'SharingCriteriaRule')
+				{
+					var srcMetaItem = srcjson.SharingRules;
+					srcitems = srcMetaItem.sharingCriteriaRules;
+				}
+				else if(metaType == 'SharingOwnerRule')
+				{
+					var srcMetaItem = srcjson.SharingRules;
+					srcitems = srcMetaItem.sharingOwnerRules;
+				}
+				else if(metaType == 'BusinessProcess')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.businessProcesses;
+				}
+				else if(metaType == 'SharingReason')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.sharingReasons;
+				}
+				else if(metaType == 'EscalationRule')
+				{
+					var srcMetaItem = srcjson.EscalationRules;
+					srcitems = srcMetaItem.escalationRule;
+				}
+				else if(metaType == 'MatchingRule')    
+				{
+					var srcMetaItem = srcjson.MatchingRules;
+					srcitems = srcMetaItem.matchingRules;
+				}
+				else if(metaType == 'ManagedTopic')
+				{
+					var srcMetaItem = srcjson.ManagedTopics;
+					srcitems = srcMetaItem.ManagedTopic;
+				}
+				if(srcitems != undefined)
+				{
+					if(srcitems.fullName == undefined)
+				    {	
+				    	for(var i in srcitems)	
+				    	{
+				    		if(i < srcitems.length)
+				    		{
+				    			var v = srcitems[i];
+				    			jsnMap[v.fullName]= JSON.stringify(v);
+				    		}
+				    	}	    	 
+				    }
+				    else
+				    {
+					    jsnMap[srcitems.fullName] = JSON.stringify(srcitems);
+				    }
+			    }
+			}
+			for(var name in jsnMap)
+			{
+				var tempXml = '';
+				var tempJSON = jsnMap[name];
+				if(tempJSON != undefined)
+				{
+					//header
+					if(metaType == 'CustomLabel')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'AssignmentRule' )
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><AssignmentRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><AutoResponseRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule'  || metaType == 'WorkflowKnowledgePublish')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><SharingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><EscalationRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><MatchingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><ManagedTopics xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					
+					//body
+					if(metaType == 'CustomLabel')
+					{
+						tempXml = tempXml +'<labels>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</labels>';
+					}
+					else if(metaType == 'CustomField')
+					{
+						tempXml = tempXml +'<fields>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fields>';
+					}
+					else if(metaType == 'ListView')
+					{
+						tempXml = tempXml +'<listViews>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</listViews>';
+					}
+					else if(metaType == 'CompactLayout')
+					{
+						tempXml = tempXml +'<compactLayouts>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</compactLayouts>';
+					}
+					else if(metaType == 'WebLink')
+					{
+						tempXml = tempXml +'<webLinks>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</webLinks>';
+					}
+					else if(metaType == 'RecordType')
+					{
+						tempXml = tempXml +'<recordTypes>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</recordTypes>';
+					}
+					else if(metaType == 'FieldSet')
+					{
+						tempXml = tempXml +'<fieldSets>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fieldSets>';
+					}
+					else if(metaType == 'ValidationRule')
+					{
+						tempXml = tempXml +'<validationRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</validationRules>';
+					}
+					else if(metaType == 'AssignmentRule')
+					{
+						tempXml = tempXml +'<assignmentRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</assignmentRule>';
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						tempXml = tempXml +'<autoResponseRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</autoResponseRule>';
+					}
+					else if(metaType == 'WorkflowAlert')
+					{
+						tempXml = tempXml +'<alerts>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</alerts>';
+					}
+					else if(metaType == 'WorkflowFieldUpdate')
+					{
+						tempXml = tempXml +'<fieldUpdates>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</fieldUpdates>';
+					}
+					else if(metaType == 'WorkflowKnowledgePublish')
+					{
+						tempXml = tempXml +'<knowledgePublishes>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</knowledgePublishes>';
+					}
+					else if(metaType == 'WorkflowOutboundMessage')
+					{
+						tempXml = tempXml +'<outboundMessages>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</outboundMessages>';
+					}
+					else if(metaType == 'WorkflowTask')
+					{
+						tempXml = tempXml +'<tasks>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</tasks>';
+					}
+					else if(metaType == 'WorkflowRule')
+					{
+						tempXml = tempXml +'<rules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</rules>';
+					}
+					else if(metaType == 'SharingCriteriaRule')
+					{
+						tempXml = tempXml +'<sharingCriteriaRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingCriteriaRules>';
+					}
+					else if(metaType == 'SharingOwnerRule')
+					{
+						tempXml = tempXml +'<sharingOwnerRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingOwnerRules>';
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						tempXml = tempXml +'<escalationRule>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</escalationRule>';
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						tempXml = tempXml +'<matchingRules>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</matchingRules>';
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						tempXml = tempXml +'<managedTopic>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</managedTopic>';
+					}
+					else if(metaType == 'BusinessProcess')
+					{
+						tempXml = tempXml +'<businessProcesses>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</businessProcesses>';
+					}
+					else if(metaType == 'SharingReason')
+					{
+						tempXml = tempXml +'<sharingReasons>'+x2js.json2xml_str($.parseJSON(tempJSON))+'</sharingReasons>';
+					}
+					
+					
+					//footer
+					if(metaType == 'CustomLabel')
+					{
+						tempXml = tempXml +'</CustomLabels>';
+					}
+					else if(metaType == 'AssignmentRule' )
+					{
+						tempXml = tempXml +'</AssignmentRules>';
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						tempXml = tempXml +'</AutoResponseRules>';
+					}
+					else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule' || metaType == 'WorkflowKnowledgePublish')
+					{
+						tempXml = tempXml +'</Workflow>';
+					}
+					else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+					{
+						tempXml = tempXml +'</SharingRules>';
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						tempXml = tempXml +'</EscalationRules>';
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						tempXml = tempXml +'</MatchingRules>';
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						tempXml = tempXml +'</ManagedTopics>';
+					}
+					else
+					{
+						tempXml = tempXml +'</CustomObject>';
+					}
+//					tempXml = unescape(encodeURIComponent(tempXml));
+					fileMap[metaType+"#"+fullName+""+name]=	getCrcWithData(tempXml,{isInnerType:true});
+				}
+			}
+		}
+		
+		const XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>';
+		function getCrcWithData(zipData,flags)
+		{
+			var r = new Object();
+			if (zipData != undefined && flags != undefined && flags.isInnerType == true){
+				zipData = vkbeautify.xml(zipData);
+			}
+			r.crc32 = normalZip.crc32(zipData,32);
+			if (flags != undefined && flags.compress == true){
+				r.data = pako.deflate(zipData, { to: 'string' });
+			}else{
+				r.data = zipData;
+			}
+			return r;
+		}
+		
+		// analyse and return bundle's crc32 sum (see the specs for detail)
+		function composeBundleCrc(bundleComponentStack) {
+			var mapComp = {'.cmp':'','.cmp-meta.xml':'' ,'Controller.js':'','Helper.js':'','.css':'','.auradoc':'','Renderer.js':'','.design':'','.svg':''};
+            var crcCode = '';
+                                                                
+			for (var i = 0; i < bundleComponentStack.length; i++){
+                 var zipFileName = bundleComponentStack[i].fileName;
+                 if(zipFileName != undefined)
+                 {
+          			var index = getBundleExt(zipFileName);
+                    if (index > -1){
+        	          	var ext = zipFileName.substr(index)
+    	                mapComp[ext] = bundleComponentStack[i].crc32;
+                    }
+                 }
+             }
+             crcCode = mapComp['.cmp']+','+mapComp['.cmp-meta.xml']+ ','+mapComp['Controller.js']+','+mapComp['Helper.js']+
+                                      ','+mapComp['.css']+','+mapComp['.auradoc']+','+mapComp['Renderer.js']+','+mapComp['.design']+','+mapComp['.svg'];
+             return crcCode;
+		}
+		
+		function getBundleExt(str) {
+        	var index = str.lastIndexOf('.js');
+        	if (index > -1){// verify 3 exts
+        		index = str.lastIndexOf('Controller.js');
+        		if (index == -1){
+	        		index = str.lastIndexOf('Helper.js');
+			   		if (index == -1){
+	        			index = str.lastIndexOf('Renderer.js');
+       				}
+        		}
+        		return index;
+        	}
+        	index = str.lastIndexOf('.cmp-meta.xml');
+        	if (index == -1){
+        		return str.lastIndexOf('.');
+        	}
+        	return index;
+        }
+		
+		function profileJoinOneByOne(oldProfileXML,newProfileXML) 
+		{
+			var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false, escapeMode: true});
+			var oldJSN = x2js.xml_str2json(oldProfileXML);
+			var newJSN = x2js.xml_str2json(newProfileXML);
+			if(newJSN.Profile != undefined && oldJSN.Profile != undefined)
+			{
+				srcjson = newJSN.Profile;
+				var profile = oldJSN.Profile;
+				
+				if(srcjson._xmlns != undefined)
+				{
+					profile._xmlns = srcjson._xmlns;
+				}
+				if(srcjson.applicationVisibilities != undefined)
+				{
+					profile.applicationVisibilities = srcjson.applicationVisibilities;
+				}
+				if(srcjson.classAccesses != undefined)
+				{
+					profile.classAccesses = srcjson.classAccesses;
+				}
+				if(srcjson.custom != undefined)
+				{
+					profile.custom = srcjson.custom;
+				}
+				if(srcjson.customPermissions != undefined)
+				{
+					profile.customPermissions = srcjson.customPermissions;
+				}
+				if(srcjson.description != undefined)
+				{
+					profile.description = srcjson.description;
+				}
+				if(srcjson.externalDataSourceAccesses != undefined)
+				{
+					profile.externalDataSourceAccesses = srcjson.externalDataSourceAccesses;
+				}
+				if(srcjson.fieldLevelSecurities != undefined)
+				{
+					profile.fieldLevelSecurities = srcjson.fieldLevelSecurities;
+				}
+				if(srcjson.fieldPermissions != undefined)
+				{
+					profile.fieldPermissions = srcjson.fieldPermissions;
+				}
+				if(srcjson.fullName != undefined)
+				{
+					profile.fullName = srcjson.fullName;
+				}
+				if(srcjson.layoutAssignments != undefined)
+				{
+					profile.layoutAssignments = srcjson.layoutAssignments;
+				}
+				if(srcjson.loginHours != undefined)
+				{
+					profile.loginHours = srcjson.loginHours;
+				}
+				if(srcjson.loginIpRanges != undefined)
+				{
+					profile.loginIpRanges = srcjson.loginIpRanges;
+				}
+				if(srcjson.objectPermissions != undefined)
+				{
+					profile.objectPermissions = srcjson.objectPermissions;
+				}
+				if(srcjson.pageAccesses != undefined)
+				{
+					profile.pageAccesses = srcjson.pageAccesses;
+				}
+				if(srcjson.recordTypeVisibilities != undefined)
+				{
+					profile.recordTypeVisibilities = srcjson.recordTypeVisibilities;
+				}
+				if(srcjson.tabVisibilities != undefined)
+				{
+					profile.tabVisibilities = srcjson.tabVisibilities;
+				}
+				if(srcjson.userLicense != undefined)
+				{
+					profile.userLicense = srcjson.userLicense;
+				}
+				if(srcjson.userPermissions != undefined)
+				{
+					profile.userPermissions = srcjson.userPermissions;
+				}
+				oldJSN.Profile = profile;
+			}
+			fullXML = x2js.json2xml_str(oldJSN);
+//			fullXML = unescape(encodeURIComponent(fullXML));
+
+			return fullXML;
+		}
+		
+		function permissionSetJoinOneByOne(oldPermissionSetXML,newPermissionSetXML) 
+		{
+			var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false, escapeMode: true});
+			var oldJSN = x2js.xml_str2json(oldPermissionSetXML);
+			var newJSN = x2js.xml_str2json(newPermissionSetXML);
+			if(newJSN.PermissionSet != undefined && oldJSN.PermissionSet != undefined)
+			{
+				srcjson = newJSN.PermissionSet;
+				var perm = oldJSN.PermissionSet;
+				
+				if(srcjson._xmlns != undefined)
+				{
+					perm._xmlns = srcjson._xmlns;
+				}
+				if(srcjson.applicationVisibilities != undefined)
+				{
+					perm.applicationVisibilities = srcjson.applicationVisibilities;
+				}
+				if(srcjson.classAccesses != undefined)
+				{
+					perm.classAccesses = srcjson.classAccesses;
+				}
+				if(srcjson.customPermissions != undefined)
+				{
+					perm.customPermissions = srcjson.customPermissions;
+				}
+				if(srcjson.description != undefined)
+				{
+					perm.description = srcjson.description;
+				}
+				if(srcjson.externalDataSourceAccesses != undefined)
+				{
+					perm.externalDataSourceAccesses = srcjson.externalDataSourceAccesses;
+				}
+				if(srcjson.fieldLevelSecurities != undefined)
+				{
+					perm.fieldLevelSecurities = srcjson.fieldLevelSecurities;
+				}
+				if(srcjson.fieldPermissions != undefined)
+				{
+					perm.fieldPermissions = srcjson.fieldPermissions;
+				}
+				if(srcjson.label != undefined)
+				{
+					perm.label = srcjson.label;
+				}
+				if(srcjson.objectPermissions != undefined)
+				{
+					perm.objectPermissions = srcjson.objectPermissions;
+				}
+				if(srcjson.pageAccesses != undefined)
+				{
+					perm.pageAccesses = srcjson.pageAccesses;
+				}
+				if(srcjson.recordTypeVisibilities != undefined)
+				{
+					perm.recordTypeVisibilities = srcjson.recordTypeVisibilities;
+				}
+				if(srcjson.tabSettings != undefined)
+				{
+					perm.tabSettings = srcjson.tabSettings;
+				}
+				if(srcjson.userLicense != undefined)
+				{
+					perm.userLicense = srcjson.userLicense;
+				}
+				if(srcjson.userPermissions != undefined)
+				{
+					perm.userPermissions = srcjson.userPermissions;
+				}
+				oldJSN.PermissionSet = perm;
+			}
+			fullXML = x2js.json2xml_str(oldJSN);
+//			fullXML = unescape(encodeURIComponent(fullXML));
+			return fullXML;
+		}
+		
+		function setAll(array,isAllChecked){
+    	        	for(var index = 0; index < array.length; index++) {
+        	            if(isAllChecked)
+            	            array[index].check = true;
+                	    else
+                    	    array[index].check = false;  
+                 	}
+        }
+		
+
+
+	</script>
+</apex:page>

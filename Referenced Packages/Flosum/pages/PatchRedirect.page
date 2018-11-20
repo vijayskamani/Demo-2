@@ -1,0 +1,3 @@
+<apex:page standardController="Flosum__Patch__c" extensions="Flosum.PatchRedirectExtension" action="{!redirectToPatch}" sidebar="false">
+	<c:TrackPanel />
+</apex:page>

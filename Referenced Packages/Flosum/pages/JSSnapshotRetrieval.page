@@ -1,0 +1,1254 @@
+<apex:page controller="Flosum.JSSnapshotRetrievalController" sidebar="false" doctype="html-5.0" action="{!snapshotAction}">
+	<c:TrackPanel />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__Utility, 'JS/jsforce.min_1.7.0.js')}"/> 
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/ga.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/zip.js')}"/>
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+    <script type="text/javascript">
+        var __sfdcSessionId = '{!GETSESSIONID()}';
+    </script>
+    <script src="/soap/ajax/36.0/connection.js" type="text/javascript"></script>
+	<c:Wait />
+	<style>
+		.message {
+		    list-style-type: none;
+		}
+		.daysLabel{
+		    color: rgb(79, 74, 96);
+   			font-size: 11px;
+		}
+	</style>
+	<apex:form id="meta">
+		<apex:outputPanel id="msg2">
+			<apex:pagemessage rendered="{!If(sanpshotId != null && sanpshotId != '',true,false)}" severity="warning"/>
+		</apex:outputPanel>
+		<apex:pagemessages id="msg"/>
+		<apex:inputHidden value="{!isSuccessful}" id="isErrorInRetrievalId"/>
+		<apex:pageBlock title="Organization ({!orgname})" rendered="{!orgname != null && metatypesList.size > 0}">
+			<apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="enableBoth();">
+				<apex:param assignTo="{!message}" value="" name="newstr"/>
+			</apex:actionfunction>
+			<apex:actionFunction action="{!completeRetrieval}" name="saveSnapshot" reRender="msg" onComplete="enableBoth();">
+			</apex:actionFunction>
+		    <apex:pageBlockButtons >
+		        <apex:commandButton value="Save Snapshot" styleClass="disableitem" onClick="disableBoth();" action="{!listMetadataItems}" onComplete="startRetrieval('{!sanpshotId}','{!logRecordId}','{!filterMiliSeconds}','{!typesStr}','{!session}','{!instance}','{!refereshToken}');" reRender="msg,msg2,logPanel,sessioinPanel"/>
+		    </apex:pageBlockButtons>
+		    <apex:pageBlockSection columns="1">
+		        <apex:pageBlockSectionItem id="sname">
+		            <apex:outputLabel value="Snapshot Name"/>
+		            <apex:inputText value="{!snapshotName}" styleClass="disableitem"/>    
+		        </apex:pageBlockSectionItem>
+		        <apex:pageBlockSectionItem >
+		            <apex:outputLabel value="{!$Label.flosum__modified_in_last_days_label}"/>
+		            <apex:outputPanel ><apex:input label="{!$Label.flosum__modified_in_last_days_label}" value="{!filterDate}" type="number" id="afterDateToFilter" html-min="0" required="true" html-max="3650" styleClass="disableitem"/><apex:outputLabel styleClass="daysLabel" value="days"/></apex:outputPanel>
+		        </apex:pageBlockSectionItem>
+		        <apex:pageBlockSectionItem > 
+		            <apex:pageblockTable value="{!metatypesList}" var="item">
+		                <apex:column width="40px">
+		                     <apex:facet name="header"><input type="checkbox" onclick="checkAll(this);" class="disableitem">&nbsp;</input></apex:facet>
+		                    <apex:inputCheckbox value="{!item.selected}" styleclass="sel disableitem"/>
+		                </apex:column>
+		                <apex:column headervalue="MetadataTypes"><apex:outputLabel value="{!item.metatype}" /></apex:column>
+		            </apex:pageblockTable> 
+		        </apex:pageBlockSectionItem>
+		    </apex:pageBlockSection>
+		</apex:pageBlock>
+		<apex:outputPanel id="logPanel">
+			<script>
+				snapshotName = '{!snapshotName}';
+				lastModifiedDaysStr = '{!filterDate}';
+			</script>
+		</apex:outputPanel>
+	</apex:form>
+	<script>
+		//string endsWith method for safari browser.
+		String.prototype.endsWith = function(pattern) {
+            var d = this.length - pattern.length;
+            return d >= 0 && this.lastIndexOf(pattern) === d;
+        };
+        var apiVersion = {!localApiVersion};
+        var startTimeOfSnapshot;
+        var snapshotName;
+		var lastModifiedDaysStr;
+        var isErrorInRetrieval = false;
+        zip.workerScriptsPath = "{!URLFOR($Resource.zipp,'res/js/workers')}/";
+        var zipFileEntry, zipWriter, writer, creationMethod, URL = window.webkitURL || window.mozURL || window.URL;
+        var metadataPollTimeOut = 18000000;
+		var metadataPollInterval = 300000;
+        var sourceSession = '';
+		var sourceInstance = '';
+		var sourceRefereshToken = '';
+		var flosumsf = jsforce;
+		Visualforce.remoting.timeout = 120000;
+		var filterValue;
+		var snapId;
+		var metaTypesLi = [];
+		var conn1;
+		var selfConn1;
+		
+		var permissionMap = {};
+		permissionMap['CustomObject'] = ['*'];
+		permissionMap['ApexClass'] = ['*'];
+		permissionMap['ApexPage'] = ['*'];
+		permissionMap['Layout'] = ['*'];
+		permissionMap['CustomTab'] = ['*'];
+		permissionMap['CustomApplication'] = ['*'];
+		permissionMap['ExternalDataSource'] = ['*'];
+		permissionMap['CustomPermission'] = ['*'];
+		permissionMap['CustomField'] = ['*'];
+		permissionMap['RecordType'] = ['*'];
+		
+		var manageableStateToRetrieve = {};
+        manageableStateToRetrieve['released'] = 'released';
+        manageableStateToRetrieve['unmanaged'] = 'unmanaged';
+        manageableStateToRetrieve['beta'] = 'beta';
+        manageableStateToRetrieve[undefined] = 'undefined';
+		
+		var filteredMetaItems = {};
+		var AsyncIdMap = {};
+		var createdRequestLi =[];
+		var zipFileInfoList = [];
+		var	currentRequestLi = [];
+		var currentRequestIndex = 0;
+		var permissionFileMap = {};
+		var isFirstRequest = true;
+		var snapshotDetailLog = '';
+		var recentAttachmentId = '';
+		var snapMetaLogId;
+		var firstLimit = 19;
+		
+		function updateRetrievalLog(IsCompleted,callback)
+		{
+			var tempLog = formatAMPM(startTimeOfSnapshot)+": "+"Snapshot started at "+ formatAMPM(startTimeOfSnapshot)+' for last '+lastModifiedDaysStr+' days.\n' +''+snapshotDetailLog;
+			if(recentAttachmentId != '')
+			{
+				var att = new sforce.SObject("Attachment");
+	            //att.ContentType = 'text/plain'; 
+		 		att.Id = recentAttachmentId;
+				att.Body = stringToBase64Encode(tempLog);
+	            sforce.connection.update([att],
+	            {
+	                onSuccess : function(result, source)
+	                {
+	                    if (result[0].getBoolean("success"))
+	                    {
+	                        console.log("Log updated with id " + result[0].id);
+	                        if(IsCompleted)
+	                        {
+	                        	unbindWindow();
+	                        	callback();
+	                        }
+	                        else
+	                        	callback();
+	                    }
+	                    else
+	                    {
+	                        console.log("Error while updating retrieval log.");
+	                    	console.log(result);
+	                        unbindWindow();
+	                        return showMessage("Error while updating retrieval log ("+result[0].errors+')');
+	                    }
+	                },
+	                onFailure : function(error, source)
+	                {
+	                	console.log("Error while updating retrieval log.");
+						console.log(error);
+						unbindWindow();
+						return showMessage("Error : "+error);
+	                }
+	                
+	            });
+	        }
+	        else
+	        {
+	        	var att = new sforce.SObject("Attachment");
+	            att.Name = snapshotName+' Logfile';
+	            att.ContentType = 'text/plain';
+	            att.Description = 'JavaScript';
+		 		att.ParentId = snapMetaLogId;  
+				att.Body = stringToBase64Encode(tempLog);
+	            sforce.connection.create([att],
+	            {
+	                onSuccess : function(result, source)
+	                {
+	                    if (result[0].getBoolean("success"))
+	                    {
+	                        console.log("Log created with id " + result[0].id);
+	                        recentAttachmentId = result[0].id;
+	                        if(IsCompleted)
+	                        {
+	                        	unbindWindow();
+	                        	callback();
+	                        }
+	                        else
+	                        	callback();
+	                    }
+	                    else
+	                    {
+	                    	console.log("Error while creating retrieval log.");
+	                    	console.log(result);
+	                        unbindWindow();
+	                        return showMessage("Error while creating retrieval log ("+result[0].errors+')');
+	                    }
+	                },
+	                onFailure : function(error, source)
+	                {
+	                    console.log("Error while creating retrieval log.");
+						console.log(error);
+						unbindWindow();
+	                    return showMessage("Error : "+error);
+	                }
+	            });
+	        }
+		}
+        
+        function startRetrieval(sanpshotId,logId,filterMiliSeconds,typesStr,session,instance,refereshToken)
+		{
+			isErrorInRetrieval = false;
+			snapMetaLogId = logId;
+			sourceSession = session;
+			sourceRefereshToken = refereshToken;
+			sourceInstance = instance;
+			filteredMetaItems = {};
+			metaTypesLi = [];
+			AsyncIdMap = {};
+			createdRequestLi =[];
+			zipFileInfoList = [];
+			currentRequestLi = [];
+			currentRequestIndex = 0;
+			permissionFileMap = {};
+			isFirstRequest = true;
+			startTimeOfSnapshot = new Date();
+			console.log('sanpshotId---'+sanpshotId);
+			if(sanpshotId != undefined && sanpshotId != '')
+			{
+				snapId = sanpshotId;
+				setDefaultMessageOnPage('Please do not close this browser tab till the snapshot completes.#Closing this tab may interrupt the snapshot.');
+				bindWindow();
+				var tempLi = JSON.parse(typesStr);
+				for(var index in tempLi)
+				{
+					if(index < tempLi.length)
+					{
+						var Mtype = tempLi[index];
+						if(Mtype == 'Profile' || Mtype == 'PermissionSet')
+							metaTypesLi.push(Mtype);
+					}
+				}
+				sourceSession = session;
+				sourceInstance = instance;
+				sourceRefereshToken = refereshToken;
+				filterValue = parseInt(filterMiliSeconds);
+				conn1 = createConnection(sourceSession,sourceRefereshToken,sourceInstance);
+				conn1.metadata.pollTimeout = metadataPollTimeOut;
+        		conn1.metadata.pollInterval = metadataPollInterval;
+        		setMessageOnPage("Creating snapshot...");
+        		errorCount=0;
+        		if(metaTypesLi.length > 0)
+        		{
+        			listStandardObject();
+        			//queryProfileAndPermissionSet();
+        		}
+			}
+			else
+			{
+				enableBoth();
+			}
+		}
+		
+		function listStandardObject()
+		{
+			var queryLi = [];
+	       	var query = new Object();
+	       	query.folder = '';
+	       	query.type = 'CustomObject';
+	       	queryLi.push(query);
+			conn1.metadata.list(queryLi, ''+apiVersion, function(err, result){
+	       		if(err)
+				{
+					if(err != null && err != undefined && err.errorCode != undefined)
+			        {
+			        	snapshotDetailLog += getCurrentTime()+": "+'Error ('+err.message+') in Retrieving the list of CustomObject.\n';
+			        }
+			        else
+			        {
+			        	snapshotDetailLog += getCurrentTime()+": "+'Error(No response received from the server) in Retrieving the list of CustomObject.\n';
+			        }
+			        fillErrorFieldInRetrieval(true);
+				}
+				else
+				{
+					var apiNameLi = [];
+					if(Array.isArray(result))
+	         		{
+	         			for(var index in result)
+	           			{
+	           				if(index < result.length)
+	           				{
+	           					var meta = result[index];
+	           					if(meta != undefined && meta.fullName != undefined)
+       							{
+	            					apiNameLi.push(meta.fullName);
+								}
+	           				}
+	           			}
+       				}
+       				else
+       				{
+       					var meta = result;
+       					if(meta != undefined && meta.fullName != undefined)
+       					{
+          					apiNameLi.push(meta.fullName);
+						}
+       				}
+       				if(apiNameLi.length > 0)
+       					permissionMap['CustomObject'] = apiNameLi;
+				}
+				queryProfileAndPermissionSet();
+			});
+		}
+		
+		function queryProfileAndPermissionSet()
+		{
+			var queryIndex = 0;
+			function queryOneType(){
+				if(queryIndex < metaTypesLi.length)
+				{
+					var queryLi = [];
+		        	var query = new Object();
+		        	query.folder = '';
+		        	query.type = metaTypesLi[queryIndex];
+		        	queryLi.push(query);
+		        	//setMessageOnPage("Creating snapshot...");
+		        	setMessageOnPage("Finding out components changed for "+metaTypesLi[queryIndex]+".");
+					snapshotDetailLog += getCurrentTime()+": "+"Retrieving the list of "+metaTypesLi[queryIndex]+".\n";
+		        	conn1.metadata.list(queryLi, ''+apiVersion, function(err, result){
+		        		if(err)
+						{
+							if(err != null && err != undefined && err.errorCode != undefined)
+					        {
+					        	snapshotDetailLog += getCurrentTime()+": "+'Error ('+err.message+') in Retrieving the list of '+metaTypesLi[queryIndex]+'.\n';
+					        }
+					        else
+					        {
+					        	snapshotDetailLog += getCurrentTime()+": "+'Error(No response received from the server) in Retrieving the list of '+metaTypesLi[queryIndex]+'.\n';
+					        }
+					        fillErrorFieldInRetrieval(true);
+						}
+						else
+						{
+							var metaItemLi = [];
+							if(Array.isArray(result))
+            				{
+            					for(var index in result)
+		            			{
+		            				if(index < result.length)
+		            				{
+		            					var meta = result[index];
+		            					if(meta != undefined && meta.lastModifiedDate != undefined)
+            							{
+			            					var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+											if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue))
+											{
+												metaItemLi.push(meta);
+											}
+										}
+		            				}
+		            			}
+            				}
+            				else
+            				{
+            					var meta = result;
+            					if(meta != undefined && meta.lastModifiedDate != undefined)
+            					{
+	            					var metaLastModifiedDate = new Date(meta.lastModifiedDate).getTime();
+									if(manageableStateToRetrieve[meta.manageableState] != undefined && (filterValue == 0 || metaLastModifiedDate > filterValue))
+									{
+										metaItemLi.push(meta);
+									}
+								}
+            				}
+            				if(metaItemLi.length > 0)
+            					filteredMetaItems[metaTypesLi[queryIndex]] = metaItemLi;
+						}
+						queryIndex++;
+		        		queryOneType();
+		        	});
+				}
+				else
+				{
+					console.log('Query completed.');
+					processAllRequest();
+				}
+			}
+			queryOneType();
+		}
+		
+		function processAllRequest()
+		{
+			currentRequestLi = [];
+			if(mapCounter(filteredMetaItems))
+			{
+				setMessageOnPage("Creating requests for retrieval.");
+        		snapshotDetailLog+= getCurrentTime()+": "+"Creating requests for retrieval.\n";
+				var requestMetaTypeLi = [];
+				for(var key in filteredMetaItems)
+				{
+					requestMetaTypeLi.push(key);
+				}
+				var requestIndex = 0;
+				function createRequest(){
+					if(requestIndex < requestMetaTypeLi.length)
+					{
+						var metaType = requestMetaTypeLi[requestIndex];
+						var items = filteredMetaItems[metaType];
+						var oneTypeMetaItems = [];
+						//var objectLi = permissionMap['CustomObject'];
+						for(var index=0; index< items.length; index++)
+						{
+							if(index != 0 && index % firstLimit == 0)
+							{
+								var requestDetail = {};
+								requestDetail.MetaType = metaType;
+								requestDetail.Items = oneTypeMetaItems;
+								requestDetail.ItemNames = [];
+								requestDetail.IsFirst = true;
+								for(var tempIndex in oneTypeMetaItems)
+								{
+									if(tempIndex < oneTypeMetaItems.length)
+									{
+										requestDetail.ItemNames.push(oneTypeMetaItems[tempIndex].fullName);
+									}
+								}
+								if(permissionMap['CustomObject'] != undefined && permissionMap['CustomObject'].length > 0)
+									requestDetail.CustomObject = permissionMap['CustomObject'];
+								if(permissionMap['ApexClass'] != undefined && permissionMap['ApexClass'].length > 0)
+									requestDetail.ApexClass = permissionMap['ApexClass'];
+								if(permissionMap['ApexPage'] != undefined && permissionMap['ApexPage'].length > 0)
+									requestDetail.ApexPage = permissionMap['ApexPage'];
+								if(metaType == 'Profile')
+								{
+									if(permissionMap['Layout'] != undefined && permissionMap['Layout'].length > 0)
+										requestDetail.Layout = permissionMap['Layout'];
+								}
+								if(permissionMap['CustomTab'] != undefined && permissionMap['CustomTab'].length > 0)
+									requestDetail.CustomTab = permissionMap['CustomTab'];
+								if(permissionMap['CustomApplication'] != undefined && permissionMap['CustomApplication'].length > 0)
+									requestDetail.CustomApplication = permissionMap['CustomApplication'];
+								if(permissionMap['ExternalDataSource'] != undefined && permissionMap['ExternalDataSource'].length > 0)
+									requestDetail.ExternalDataSource = permissionMap['ExternalDataSource'];
+								if(permissionMap['CustomPermission'] != undefined && permissionMap['CustomPermission'].length > 0)
+									requestDetail.CustomPermission = permissionMap['CustomPermission'];
+								
+								if(permissionMap['CustomField'] != undefined && permissionMap['CustomField'].length > 0)
+									requestDetail.CustomField = permissionMap['CustomField'];
+								if(permissionMap['RecordType'] != undefined && permissionMap['RecordType'].length > 0)
+									requestDetail.RecordType = permissionMap['RecordType'];
+								currentRequestLi.push(requestDetail);
+								
+								oneTypeMetaItems = [];
+							}
+							oneTypeMetaItems.push(items[index]);
+						}
+						if(oneTypeMetaItems.length > 0)
+						{
+							var requestDetail = {};
+							requestDetail.MetaType = metaType;
+							requestDetail.Items = oneTypeMetaItems;
+							requestDetail.ItemNames = [];
+							requestDetail.IsFirst = true;
+							for(var tempIndex in oneTypeMetaItems)
+							{
+								if(tempIndex < oneTypeMetaItems.length)
+								{
+									requestDetail.ItemNames.push(oneTypeMetaItems[tempIndex].fullName);
+								}
+							}
+							if(permissionMap['CustomObject'] != undefined && permissionMap['CustomObject'].length > 0)
+								requestDetail.CustomObject = permissionMap['CustomObject'];
+							if(permissionMap['ApexClass'] != undefined && permissionMap['ApexClass'].length > 0)
+								requestDetail.ApexClass = permissionMap['ApexClass'];
+							if(permissionMap['ApexPage'] != undefined && permissionMap['ApexPage'].length > 0)
+								requestDetail.ApexPage = permissionMap['ApexPage'];
+							if(metaType == 'Profile')
+							{
+								if(permissionMap['Layout'] != undefined && permissionMap['Layout'].length > 0)
+									requestDetail.Layout = permissionMap['Layout'];
+							}
+							if(permissionMap['CustomTab'] != undefined && permissionMap['CustomTab'].length > 0)
+								requestDetail.CustomTab = permissionMap['CustomTab'];
+							if(permissionMap['CustomApplication'] != undefined && permissionMap['CustomApplication'].length > 0)
+								requestDetail.CustomApplication = permissionMap['CustomApplication'];
+							if(permissionMap['ExternalDataSource'] != undefined && permissionMap['ExternalDataSource'].length > 0)
+								requestDetail.ExternalDataSource = permissionMap['ExternalDataSource'];
+							if(permissionMap['CustomPermission'] != undefined && permissionMap['CustomPermission'].length > 0)
+								requestDetail.CustomPermission = permissionMap['CustomPermission'];
+								
+							if(permissionMap['CustomField'] != undefined && permissionMap['CustomField'].length > 0)
+								requestDetail.CustomField = permissionMap['CustomField'];
+							if(permissionMap['RecordType'] != undefined && permissionMap['RecordType'].length > 0)
+								requestDetail.RecordType = permissionMap['RecordType'];
+									
+							currentRequestLi.push(requestDetail);
+						}
+						requestIndex++;
+						setTimeout(createRequest,00001);
+					}
+					else
+					{
+						updateRetrievalLog(false,processRequest);
+					}
+				}
+				createRequest();
+			}
+			else
+			{
+				console.log('No Component found.');
+				snapshotDetailLog+= getCurrentTime()+": Snapshot completed successfully.\n";
+				snapshotDetailLog+= getCurrentTime()+": No components are changed in last "+lastModifiedDaysStr+" days.\n";
+				updateRetrievalLog(true,saveSnapshot);
+			}
+		}
+		
+		function processRequest()
+		{
+			AsyncIdMap = {};
+			createdRequestLi =[];
+			currentRequestIndex = 0;
+			function processOneByOne(){
+				if(currentRequestIndex < currentRequestLi.length)
+				{
+					setMessageOnPage("Creating requests for retrieval.");
+					console.log('Creating request--'+currentRequestIndex+'/'+currentRequestLi.length);
+					var requestDetail = currentRequestLi[currentRequestIndex];
+					var req = getRetrieveRequest();
+       				var metaItemsInRequest = [];
+					var oneType = {};
+					oneType.name = requestDetail.MetaType;
+					oneType.members = requestDetail.ItemNames;
+					req.unpackaged.types.push(oneType);
+					if(requestDetail.CustomObject != undefined && requestDetail.CustomObject.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'CustomObject';
+						tempOneType.members = requestDetail.CustomObject;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.ApexClass != undefined && requestDetail.ApexClass.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'ApexClass';
+						tempOneType.members = requestDetail.ApexClass;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.ApexPage != undefined && requestDetail.ApexPage.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'ApexPage';
+						tempOneType.members = requestDetail.ApexPage;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.Layout != undefined && requestDetail.Layout.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'Layout';
+						tempOneType.members = requestDetail.Layout;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.CustomTab != undefined && requestDetail.CustomTab.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'CustomTab';
+						tempOneType.members = requestDetail.CustomTab;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.CustomApplication != undefined && requestDetail.CustomApplication.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'CustomApplication';
+						tempOneType.members = requestDetail.CustomApplication;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.ExternalDataSource != undefined && requestDetail.ExternalDataSource.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'ExternalDataSource';
+						tempOneType.members = requestDetail.ExternalDataSource;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.CustomPermission != undefined && requestDetail.CustomPermission.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'CustomPermission';
+						tempOneType.members = requestDetail.CustomPermission;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.CustomField != undefined && requestDetail.CustomField.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'CustomField';
+						tempOneType.members = requestDetail.CustomField;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(requestDetail.RecordType != undefined && requestDetail.RecordType.length > 0)
+					{
+						var tempOneType = {};
+						tempOneType.name = 'RecordType';
+						tempOneType.members = requestDetail.RecordType;
+						req.unpackaged.types.push(tempOneType);
+					}
+					if(isFirstRequest)
+	       				snapshotDetailLog+= getCurrentTime()+": "+"Sending request for retrieval of "+requestDetail.MetaType+".\n";
+	       			else
+	       				snapshotDetailLog+= getCurrentTime()+": "+"Resending request for retrieval of "+requestDetail.MetaType+".\n";
+					conn1.metadata.retrieve(req,function(err, result){
+						if(err)
+						{
+							console.log('Error while creating retrieval request.');
+							console.log(err);
+							console.log(req);
+							if(err != null && err != undefined && err.errorCode != undefined)
+				           	{
+				           		snapshotDetailLog+= getCurrentTime()+": "+'Error while creating retrieval request of '+requestDetail.MetaType+' '+err.errorCode+' ('+err.message+').\n';
+				           	}
+				           	else
+				           	{
+				           		
+				           		snapshotDetailLog+= getCurrentTime()+": "+'Error while creating retrieval request of '+requestDetail.MetaType+' (No response received from the server).\n';
+				           	}
+							fillErrorFieldInRetrieval(true);
+						}
+						else
+						{
+							if(result != undefined && result.id != undefined)
+							{
+								AsyncIdMap[result.id] = requestDetail;
+							}
+						}
+						currentRequestIndex++;
+						processOneByOne();
+					});
+				}
+				else
+				{
+					console.log('all request created.');
+					for(var key in AsyncIdMap)
+					{
+						createdRequestLi.push(key);
+					}
+					var remainingTime = 20;
+        			var timeCounter = function(){
+        				if(remainingTime > 0)
+        				{
+							setMessageOnPage("Retrieval status check is scheduled after "+remainingTime+" seconds.");
+                            setTimeout(timeCounter, 1000);
+                            remainingTime--;
+        				}
+        				else
+        				{
+        					setTimeout(checkRetrievalRequest,0001);
+        				}
+        			}
+        			snapshotDetailLog+= getCurrentTime()+": Waiting for the Salesforce to respond. Next poll after 20 seconds.\n";
+        			timeCounter();
+				}
+			}
+			processOneByOne();
+		}
+		
+		function checkRetrievalRequest()
+		{
+			var createdRequestIndex = 0;
+			var NotCompletedLi = [];
+			var BreakAsyncIdLi = [];
+			function checkStatusOneByOne(){
+				if(createdRequestIndex < createdRequestLi.length)
+				{
+					console.log('Checking retrieval status--'+createdRequestIndex+'/'+createdRequestLi.length);
+					var currentAsyncId = createdRequestLi[createdRequestIndex];
+					var currentAsyncDetail = AsyncIdMap[currentAsyncId];
+					var currentMetaType = currentAsyncDetail.MetaType;
+					
+					conn1.metadata.checkRetrieveStatus(currentAsyncId,function(err,result){
+	        			if(err) 
+			            {
+			            	setMessageOnPage('Retrieving '+currentMetaType+'.');
+			            	if(err != null && err != undefined && err.errorCode != undefined)
+				           	{
+				           		fillErrorFieldInRetrieval(true);
+				            	snapshotDetailLog+= getCurrentTime()+": Error while Checking retrieval status :"+err.errorCode+"("+err.message+").\n";
+				           	}
+				           	else
+				           	{
+				           		snapshotDetailLog+= getCurrentTime()+": No response received from the server while Checking retrieval status.\n";
+			            	}
+			            	console.log('Error in retrieval.');
+			            	console.log(err);
+			            	console.log(currentAsyncDetail);
+			            	BreakAsyncIdLi.push(currentAsyncId);
+			            	createdRequestIndex++;
+			            	checkStatusOneByOne();
+			            }
+			            else
+			            {
+			            	if(result != undefined && result.id != undefined && AsyncIdMap[result.id] != undefined)
+			                {
+			                	if(result.done == 'true')
+			                	{
+			                		setMessageOnPage('Retrieving '+currentMetaType+'.');
+			                		if(result.success != 'true')
+			                		{
+			                			console.log(result);
+			                			console.log('Error in retrieval(result.success).');
+			                			snapshotDetailLog+= getCurrentTime()+": Error "+result.errorMessage;
+			                			BreakAsyncIdLi.push(currentAsyncId);
+			                			createdRequestIndex++;
+			            				checkStatusOneByOne();
+			                		}
+			                		else
+			                		{
+		                				snapshotDetailLog+= getCurrentTime()+": "+"Retrieving "+currentMetaType+".\n";
+			                			zip.createReader(new zip.Data64URIReader(result.zipFile), function(reader) {
+			                				var EntryIndex = 0;
+			                				reader.getEntries(function(entries) {
+												if(entries.length)
+												{
+													var readSingleFile = function(){
+													    if (EntryIndex < entries.length) 
+													    {
+													    	var singleEntry = entries[EntryIndex];
+													    	var fileName = singleEntry.filename;
+													    	if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0 )) 
+											            	{
+														    	entries[EntryIndex].getData(new zip.TextWriter(), function(newXml) {
+											            			permissionFileMap[fileName] = newXml;
+												            		EntryIndex++;
+																	readSingleFile();
+														    	});
+														    }
+														    else
+														    {
+														    	EntryIndex++;
+																readSingleFile();
+														    }
+													    }
+													    else
+													    {
+													    	createdRequestIndex++;
+			            									checkStatusOneByOne();
+													    }
+													}
+													readSingleFile();
+												}
+												else
+												{
+													createdRequestIndex++;
+			            							checkStatusOneByOne();
+												}
+											});
+			                			}, function(error) {
+											// onerror callback
+											console.log('Error in reading file from attachments.');
+											console.log(error);	
+											if(error.message != undefined)
+											{
+												return showMessage(error.message);
+											}
+											else
+											{
+												return showMessage('Unknown error.');
+											}										
+										});
+			                		}
+			                	}
+			                	else
+			                	{
+			                		snapshotDetailLog+= getCurrentTime()+": Waiting for Salesforce to create zip file of "+currentMetaType+".\n";
+			                		setMessageOnPage('Waiting for Salesforce to create zip file.');
+			                		NotCompletedLi.push(currentAsyncId);
+			                		createdRequestIndex++;
+			            			checkStatusOneByOne();
+			                	}
+			                }
+			            }
+			    	});
+				}
+				else
+				{
+					console.log('all request processed.');
+					createdRequestIndex = 0;
+					createdRequestLi = [];
+					if(NotCompletedLi.length > 0)
+					{
+						for(var index in NotCompletedLi)
+						{
+							if(index < NotCompletedLi.length)
+							{
+								createdRequestLi.push(NotCompletedLi[index]);
+							}
+						}
+						NotCompletedLi = [];
+						var remainingTime = 20;
+	        			var timeCounter = function(){
+	        				if(remainingTime > 0)
+	        				{
+								setMessageOnPage("Retrieval status check is scheduled after "+remainingTime+" seconds.");
+	                            setTimeout(timeCounter, 1000);
+	                            remainingTime--;
+	        				}
+	        				else
+	        				{
+	        					setTimeout(checkStatusOneByOne,0001);
+	        				}
+	        			}
+	        			snapshotDetailLog+= getCurrentTime()+": Waiting for the Salesforce to respond. Next poll after 20 seconds.\n";
+	        			timeCounter();
+					}
+					else if(BreakAsyncIdLi.length > 0)
+					{
+						isFirstRequest = false;
+						breakOneByOneIndex = 0;
+						currentRequestLi = [];
+						function breakOneByOne(){
+							if(breakOneByOneIndex < BreakAsyncIdLi.length)
+							{
+								console.log('Breaking requests in chunks.');
+								var currentAsyncId = BreakAsyncIdLi[breakOneByOneIndex];
+								var currentAsyncDetail = AsyncIdMap[currentAsyncId];
+								var currentMetaType = currentAsyncDetail.MetaType;
+								if(currentAsyncDetail.Items != undefined)
+								{
+									if(currentAsyncDetail.Items.length > 0)
+									{
+										var dynamicLimit;
+										if(currentAsyncDetail.Items.length > 5)
+											dynamicLimit = Math.floor(currentAsyncDetail.Items.length *.50);
+										else
+											dynamicLimit = 1;
+											
+										if(currentAsyncDetail.Items.length > 1)
+										{
+											var localItemNames = [];
+											var localItems = [];
+											for(var loopIndex=0; loopIndex < currentAsyncDetail.Items.length; loopIndex++)
+											{
+												var localIm = currentAsyncDetail.Items[loopIndex];
+												if(loopIndex % dynamicLimit == 0 && localItemNames.length > 0)
+												{
+													var breakedAsyncDetail = {};
+													breakedAsyncDetail.IsFirst = false;
+													breakedAsyncDetail.MetaType = currentMetaType;
+													breakedAsyncDetail.ItemNames = localItemNames;
+													breakedAsyncDetail.Items = localItems;
+													breakedAsyncDetail.CustomObject = permissionMap['CustomObject'];
+													breakedAsyncDetail.ApexClass = permissionMap['ApexClass'];
+													breakedAsyncDetail.ApexPage = permissionMap['ApexPage'];
+													if(currentMetaType == 'Profile')
+														breakedAsyncDetail.Layout = permissionMap['Layout'];
+													breakedAsyncDetail.CustomTab = permissionMap['CustomTab'];
+													breakedAsyncDetail.CustomApplication = permissionMap['CustomApplication'];
+													breakedAsyncDetail.ExternalDataSource = permissionMap['ExternalDataSource'];
+													breakedAsyncDetail.CustomPermission = permissionMap['CustomPermission'];
+													
+													breakedAsyncDetail.CustomField = permissionMap['CustomField'];
+													breakedAsyncDetail.RecordType = permissionMap['RecordType'];
+													console.log('Previous--'+currentAsyncDetail.ItemNames.length+'---Should--'+dynamicLimit+'--Exact--'+breakedAsyncDetail.ItemNames.length);
+													currentRequestLi.push(breakedAsyncDetail);
+													localItemNames = [];
+													localItems = [];
+												}
+												localItems.push(localIm);
+												localItemNames.push(localIm.fullName);
+											}
+											if(localItemNames.length > 0)
+											{
+												var breakedAsyncDetail = {};
+												breakedAsyncDetail.IsFirst = false;
+												breakedAsyncDetail.MetaType = currentMetaType;
+												breakedAsyncDetail.ItemNames = localItemNames;
+												breakedAsyncDetail.Items = localItems;
+												breakedAsyncDetail.CustomObject = permissionMap['CustomObject'];
+												breakedAsyncDetail.ApexClass = permissionMap['ApexClass'];
+												breakedAsyncDetail.ApexPage = permissionMap['ApexPage'];
+												if(currentMetaType == 'Profile')
+													breakedAsyncDetail.Layout = permissionMap['Layout'];
+												breakedAsyncDetail.CustomTab = permissionMap['CustomTab'];
+												breakedAsyncDetail.CustomApplication = permissionMap['CustomApplication'];
+												breakedAsyncDetail.ExternalDataSource = permissionMap['ExternalDataSource'];
+												breakedAsyncDetail.CustomPermission = permissionMap['CustomPermission'];
+												
+												breakedAsyncDetail.CustomField = permissionMap['CustomField'];
+												breakedAsyncDetail.RecordType = permissionMap['RecordType'];
+												console.log('Previous--'+currentAsyncDetail.ItemNames.length+'---Should--'+dynamicLimit+'--Exact--'+breakedAsyncDetail.ItemNames.length);
+												currentRequestLi.push(breakedAsyncDetail);
+											}
+										}
+										else
+										{
+											for(var loopIndex=0; loopIndex < currentAsyncDetail.Items.length; loopIndex++)
+											{
+												var localIm = currentAsyncDetail.Items[loopIndex];
+												snapshotDetailLog+= getCurrentTime()+": Unable to retrieve "+currentMetaType+" "+localIm.fullName+".\n";
+											}
+										}
+									}
+								}
+								breakOneByOneIndex++;
+								setTimeout(breakOneByOne,00001);
+							}
+							else
+							{
+								console.log('all breaked.');
+								updateRetrievalLog(false,processRequest);
+							}
+						}
+						breakOneByOne();
+					}
+					else
+					{
+						saveZipFileAndMetaItems();
+					}
+				}
+			}
+			checkStatusOneByOne();
+		}
+		
+		function saveZipFileAndMetaItems()
+		{
+			var profileItemLi = filteredMetaItems['Profile'];
+			var permissionSetItemLi = filteredMetaItems['PermissionSet'];
+			var metaSaveLi = [];
+			if(profileItemLi != undefined && profileItemLi.length > 0)
+			{
+				var profileZip = new JSZip();
+				var ItemLi = [];
+				for(var index= 0; index < profileItemLi.length; index++)
+				{
+					var item = profileItemLi[index];
+					if(permissionFileMap[item.fileName] != undefined)
+					{
+						if(ItemLi.length !=0 && ItemLi.length % 10 == 0)
+						{
+							var detail = {};
+							detail.Items = ItemLi;
+							detail.MetaType = 'Profile';
+							detail.ZipStr = profileZip.generate({type:"base64",compression:"DEFLATE"});
+							metaSaveLi.push(detail);
+							profileZip = new JSZip();
+							ItemLi = [];
+						}
+						profileZip.file(item.fileName,permissionFileMap[item.fileName]);
+						ItemLi.push(item);
+					}
+				}
+				if(ItemLi.length > 0)
+				{
+					var detail = {};
+					detail.Items = ItemLi;
+					detail.MetaType = 'Profile';
+					detail.ZipStr = profileZip.generate({type:"base64",compression:"DEFLATE"});
+					metaSaveLi.push(detail);
+				}
+			}
+			if(permissionSetItemLi != undefined && permissionSetItemLi.length > 0)
+			{
+				var profileZip = new JSZip();
+				var ItemLi = [];
+				for(var index= 0; index < permissionSetItemLi.length; index++)
+				{
+					var item = permissionSetItemLi[index];
+					if(permissionFileMap[item.fileName] != undefined)
+					{
+						if(ItemLi.length !=0 && ItemLi.length % 10 == 0)
+						{
+							var detail = {};
+							detail.Items = ItemLi;
+							detail.MetaType = 'PermissionSet';
+							detail.ZipStr = profileZip.generate({type:"base64",compression:"DEFLATE"});
+							metaSaveLi.push(detail);
+							profileZip = new JSZip();
+							ItemLi = [];
+						}
+						profileZip.file(item.fileName,permissionFileMap[item.fileName]);
+						ItemLi.push(item);
+					}
+				}
+				if(ItemLi.length > 0)
+				{
+					var detail = {};
+					detail.Items = ItemLi;
+					detail.MetaType = 'PermissionSet';
+					detail.ZipStr = profileZip.generate({type:"base64",compression:"DEFLATE"});
+					metaSaveLi.push(detail);
+				}
+			}
+			if(metaSaveLi.length > 0)
+			{
+				var saveIndex = 0;
+				function saveOneByOne(){
+					if(saveIndex < metaSaveLi.length)
+					{
+						var detail = metaSaveLi[saveIndex];
+						var att = new sforce.SObject("Attachment");
+			            att.Name = detail.MetaType;
+			            att.ContentType = 'application/zip';
+			            att.Description = detail.MetaType;
+				 		att.ParentId = snapId;  
+						att.Body = detail.ZipStr;
+						setMessageOnPage('Saving '+detail.MetaType);
+						snapshotDetailLog+= getCurrentTime()+": Saving "+detail.MetaType+".\n";
+			            sforce.connection.create([att],
+			            {
+			                onSuccess : function(result, source)
+			                {
+			                	if (result[0].getBoolean("success"))
+					            {
+					            	console.log("zi file created with id " + result[0].id);
+					            	var LimitItemList = [];
+					            	for(var tempIndex in detail.Items)
+			                        {
+			                        	if(tempIndex < detail.Items.length)
+			                        	{
+					                        var wrapItem = detail.Items[tempIndex];
+   											var metaDetail = new Object();
+   											metaDetail.fullName = wrapItem.fullName;
+   											metaDetail.fileName = wrapItem.fileName;
+   											metaDetail.lastModifiedByName = wrapItem.lastModifiedByName;
+   											metaDetail.lastModifiedDate = wrapItem.lastModifiedDate;
+   											metaDetail.type = wrapItem.type;
+   											metaDetail.attachemntId = result[0].id;
+   											metaDetail.folder = '';
+   											LimitItemList.push(metaDetail);
+										}
+									}						
+			                        Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.JSSnapshotRetrievalController.insertMetaItems}',
+							            snapId,
+							            JSON.stringify(LimitItemList),
+							            function(result3,err3){
+								            if(err3.status && result3)
+								            {
+								            	saveIndex++;
+								            	saveOneByOne();
+								            }
+								            else
+										    {
+										    	return showMessage(err3.message);
+										    }
+										});
+					            }
+					            else
+			                    {
+			                    	console.log("Error while save zip file.");
+			                    	console.log(result);
+			                    	return showMessage(JSON.stringify(result));
+			                    }
+			                },
+			                onFailure : function(error, source)
+			                {
+			                    console.log("Error while save zip file.");
+								console.log(error);
+								return showMessage(JSON.stringify(error));
+			                }
+			            });
+					}
+					else
+					{
+						console.log('Retrieval Successfully Done.');
+						snapshotDetailLog+= getCurrentTime()+": Snapshot completed successfully.\n";
+						updateRetrievalLog(true,saveSnapshot);
+					}
+				}
+				saveOneByOne();
+			}
+			else
+			{
+				console.log('No metadata items found.');
+				console.log('Retrieval Successfully Done.');
+				snapshotDetailLog+= getCurrentTime()+": Snapshot completed successfully.\n";
+				updateRetrievalLog(true,saveSnapshot);
+			}
+		}
+		
+		function mapCounter(localMap)
+		{
+			var temp = 0;
+			for(var key in localMap)
+			{
+				temp++;
+			}
+			return temp;
+		}
+		
+		function fillErrorFieldInRetrieval(errorFound)
+		{
+			if(errorFound && !isErrorInRetrieval)
+			{
+				try
+				{
+					var hds = $("[id$='isErrorInRetrievalId']").val(true);
+					isErrorInRetrieval = true;
+				}
+				catch(ex)
+				{}
+			}
+		}
+		
+		function getRetrieveRequest()
+        {
+        	var retrieveRequest = new Object();
+			retrieveRequest.apiVersion = apiVersion;
+			retrieveRequest.singlePackage = true;
+			retrieveRequest.unpackaged = {};
+			retrieveRequest.unpackaged.types = [];
+        	return retrieveRequest;
+        }
+		
+		function createConnection(accessToken,refreshToken,instanceUrl)
+		{
+			return new flosumsf.Connection({
+			  oauth2 : {
+			    clientId : '{!cred.ConsumerKey__c}',
+			    clientSecret : '{!cred.ConsumerSecret__c}',
+			    redirectUri : '{!cred.Redirect_URL__c}'
+			  },
+			  accessToken : accessToken,
+              proxyUrl: "/services/proxy",
+              //logLevel: "DEBUG",
+			  refreshToken : refreshToken,
+			  serverUrl: instanceUrl});
+		}
+		
+		function disableBoth()
+		{
+			var toDisableItems = document.getElementsByClassName('disableitem');
+			for (var i = 0; i < toDisableItems.length; i++) 
+			{
+				toDisableItems[i].disabled = true;
+			}
+		}
+		
+		function enableBoth()
+		{
+			var toDisableItems = document.getElementsByClassName('disableitem');
+			for (var i = 0; i < toDisableItems.length; i++) 
+			{
+				toDisableItems[i].disabled = false;
+			}
+		}
+		
+		function bindWindow()
+		{
+		    $(window).bind("beforeunload", function() { 
+		        return "Please do not close this page until the snapshot is complete."; 
+		    });
+		    
+		}
+		
+		function unbindWindow()
+		{
+			$(window).unbind();
+		}
+		
+		function formatAMPM(date){		
+			var hours = date.getHours();
+			var minutes = date.getMinutes();
+			var Seconds = date.getSeconds();
+            var year = date.getFullYear();
+            var month = date.getMonth()+1;
+            var day = date.getDay();
+            day = day< 10 ? '0'+day : day;
+			month = month < 10 ? '0'+month : month;
+
+			minutes = minutes < 10 ? '0'+minutes : minutes;
+			Seconds = Seconds < 10 ? '0'+Seconds : Seconds;
+			hours = hours < 10 ? '0'+hours : hours;
+			var strTime = year+'-'+month+'-'+day+' '+hours + ':' + minutes +':'+Seconds;
+			return strTime;
+		}
+		
+		function getCurrentTime(){
+			var date= new Date();					
+			var hours = date.getHours();
+			var minutes = date.getMinutes();
+			var Seconds = date.getSeconds();
+            var year = date.getFullYear();
+            var month = date.getMonth()+1;
+            var day = date.getDay();
+            day = day< 10 ? '0'+day : day;
+			month = month < 10 ? '0'+month : month;
+
+			minutes = minutes < 10 ? '0'+minutes : minutes;
+			Seconds = Seconds < 10 ? '0'+Seconds : Seconds;
+			hours = hours < 10 ? '0'+hours : hours;
+			var strTime = year+'-'+month+'-'+day+' '+hours + ':' + minutes +':'+Seconds;
+			return strTime;
+		}
+		
+		function stringToBase64Encode(str)
+       	{
+       		return window.btoa(unescape(encodeURIComponent(str)));
+       	}
+		
+		function setDefaultMessageOnPage(msg)
+		{
+			var parentVal = $("[id$='msg2']");
+			if(parentVal != undefined)
+			{
+				var childVal = parentVal.find('.messageText');
+				if(childVal != undefined)
+				{
+					if(msg.indexOf('#') > -1)
+					{
+						var li = msg.split('#');
+						var strHtml = '<span></span>';
+						for(var index=0; index < li.length; index++)
+							strHtml+= '<li>'+li[index]+'</li>';
+						childVal.html(strHtml);
+					}
+					else
+						childVal.text(msg);
+				}
+			}
+		}
+		
+		function setMessageOnPage(msg)
+		{
+			var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+				var childVal = parentVal.find('.messageText');
+				if(childVal != undefined)
+				{
+					if(msg.indexOf('#') > -1)
+					{
+						var li = msg.split('#');
+						var strHtml = '<span></span>';
+						for(var index=0; index < li.length; index++)
+							strHtml+= '<li>'+li[index]+'</li>';
+						childVal.html(strHtml);
+					}
+					else
+						childVal.text(msg);
+				}
+			}
+		}
+		
+		function checkAll(ele) {
+		     var checkboxes = document.getElementsByClassName('sel');
+		     if (ele.checked) {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = true;
+		             }
+		         }
+		     } else {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = false;
+		             }
+		         }
+		     }
+		}
+	</script>
+</apex:page>

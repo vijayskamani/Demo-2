@@ -1,0 +1,4 @@
+<apex:page controller="HIC_KanBan.Kanban_View_Controller" showheader="false" readOnly="true">
+
+            <c:Graphical_View_Component OwnerFilter="{!ownerFilterClause}" NameFilter="{!nameFilterClause}" object="{!objectName}"  picklist="{!PicklistName}" Aggregate="{!CurrencyName}" filter="{!filterClause}"/>    
+</apex:page>

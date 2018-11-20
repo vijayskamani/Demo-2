@@ -1,0 +1,156 @@
+<apex:page standardController="Flosum__Branch__c" extensions="Flosum.BranchToPatchExtension" sidebar="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<c:CommitToPatch />
+	<c:DynamicLookupScript />
+	<style>
+		div .pagination {
+			text-align: center;
+		}
+		span.paginationEle {
+		margin-left: 4px;
+		}
+		.pagination input {
+		margin-left: 4px;
+		}
+	</style>
+	<apex:form >
+		<apex:pagemessages id="msg"/>
+		<apex:actionFunction name="refreshPatchesList" reRender="toPatch,msg" oncomplete="hide();" />
+		<apex:actionfunction name="selectAllItems" action="{!selectAll}" reRender="msg,tb" onComplete="updateCheckbox();hide();">
+			<apex:param assignTo="{!selectAllFlag}" value="" name="selectAllFlag"/>
+		</apex:actionfunction>
+		<apex:pageblock title="Transfer To Patch" id="toPatch" rendered="{!branchId != null}">
+			<apex:pageBlockButtons >
+                <apex:commandButton value="Transfer To Patch" action="{!transferToPatch}" oncomplete="hide(); CTP_startCompHistoryAddToPatch('{!JSENCODE(historyIdJSON)}','{!JSENCODE(selectedPatch)}');" rerender="msg" onclick="show();"/>
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection columns="1" id="transfertopatch">
+            	<apex:pageBlockSectionItem >
+            		<apex:outputLabel value="{!$ObjectType.Flosum__Branch__c.fields.Flosum__Branch_Name__c.Label}" />
+            		<apex:outputField value="{!branch.Flosum__Branch_Name__c}"/>
+            	</apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Patch" />
+					<apex:outputPanel >
+			            <apex:inputHidden id="patchTargetId" value="{!selectedPatch}"/>
+			            <apex:inputText size="25"  id="patchTargetName" onFocus="this.blur()" disabled="false" html-callitafterchange="refreshPatchesList"/>           
+		  		    	<img src="/s.gif" 
+			            onclick="dlm_openLookupPopup('{!$Component.patchTargetName}','{!$Component.patchTargetId}','{!$ObjectType.Patch__c.Name}',''); return false" 
+			            class="lookupIcon" 
+			            onmouseout="this.className='lookupIcon';" 
+			            alt="Patch Name Lookup (New Window)" 
+			            onmouseover="this.className='lookupIconOn';"/>
+		  		    </apex:outputPanel>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!If(selectedPatch == null || selectedPatch == '',true,false)}">
+                    <apex:outputLabel value="Patch Name" />
+                    <apex:inputText value="{!patchName}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+            		<apex:outputLabel value="{!$Label.flosum__component_type}" />
+            		<apex:selectList label="{!$Label.flosum__component_type}" size="1" value="{!selectedCompType}" >
+		                <apex:selectOptions value="{!branchTypeOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="toPatch,msg" action="{!defaultPagination}" oncomplete="hide();" onsubmit="show();"/> 
+		            </apex:selectList>
+            	</apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection columns="1" id="tb">
+            	<apex:pageBlockTable value="{!branchComplist}" var="item">
+            		<apex:column headervalue="Select">
+						<apex:facet name="header">
+							<input type="checkbox" onclick="checkItemAllGlobal(this);" styleclass="sli" value="{!selectAllFlag}" id="selectall">&nbsp;</input>
+						</apex:facet>
+						<apex:inputCheckbox value="{!item.checkStatus}" styleclass="sli"/>
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Component_Name__c',If(Order == 'ASC',$Label.flosum__component_name+' ▲',$Label.flosum__component_name+' ▼') ,$Label.flosum__component_name)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Component_Name__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputText value="{!item.comp.Flosum__Component_Name__c}" />
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Component_Type__c',If(Order == 'ASC',$Label.flosum__component_type+' ▲',$Label.flosum__component_type+' ▼') ,$Label.flosum__component_type)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Component_Type__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputText value="{!item.comp.Flosum__Component_Type__c}" />
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Version__c',If(Order == 'ASC',$Label.flosum__version+' ▲',$Label.flosum__version+' ▼') ,$Label.flosum__version)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Version__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+			            <apex:outputText value="{!item.comp.Flosum__Version__c}" />
+		            </apex:column>
+		            <apex:column >
+		        		<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Last_Updated_By__c',If(Order == 'ASC',$Label.flosum__developer+' ▲',$Label.flosum__developer+' ▼') ,$Label.flosum__developer)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Updated_By__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputText value="{!item.comp.Flosum__Last_Updated_By__c}" />
+					</apex:column>
+					<apex:column >
+		        		<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Last_Modified_Date__c',If(Order == 'ASC',$Label.flosum__changed_on+' ▲',$Label.flosum__changed_on+' ▼') ,$Label.flosum__changed_on)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Modified_Date__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputText value="{!item.comp.Flosum__Last_Modified_Date__c}" />
+					</apex:column>
+		            <apex:column >
+		        		<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Last_Modified_By__c',If(Order == 'ASC',$Label.flosum__committed_by+' ▲',$Label.flosum__committed_by+' ▼') ,$Label.flosum__committed_by)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Modified_By__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+		        		<apex:outputText value="{!item.comp.Flosum__Last_Modified_By__c}" />
+		        	</apex:column>
+		        	<apex:column >
+		        		<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Committed_On__c',If(Order == 'ASC',$Label.flosum__committed_on+' ▲',$Label.flosum__committed_on+' ▼') ,$Label.flosum__committed_on)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Committed_On__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+		        		<apex:outputText value="{!item.comp.Flosum__Committed_On__c}" />
+		        	</apex:column>
+				</apex:pageBlockTable>
+		        <apex:outputPanel rendered="{!if(branchComplist.size > 0,true,false)}" layout="block" styleClass="pagination">
+						<apex:commandbutton value="First" action="{!FirstPage}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+						<apex:commandbutton value="Previous" action="{!previous}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+						<apex:outputText value="{!paginationStr}" styleClass="paginationEle"/>
+						<apex:commandbutton value="Next" action="{!next}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+						<apex:commandbutton value="Last" action="{!LastPage}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+				</apex:outputPanel>
+            </apex:pageBlockSection>
+        </apex:pageblock>
+	</apex:form>
+	<script>
+		function checkItemAllGlobal(ele) 
+		{
+			show();
+			selectAllItems(ele.checked);
+		}
+		
+		function updateCheckbox()
+		{
+			var checkbox = document.getElementById('selectall');
+			if (checkbox == null) return;
+
+			var selectedAll = true;
+			var changeClass = checkbox.getAttribute('styleclass');
+			var checkboxes = document.getElementsByClassName(changeClass);
+
+            for (var i = 0; i < checkboxes.length; i++) {
+	            if (checkboxes[i].type == 'checkbox' && checkboxes[i].id != 'selectall') {
+	                if (checkboxes[i].checked == false){ selectedAll = false; break;}
+	            }
+	         }
+	         checkbox.checked = selectedAll;
+		}
+	</script>
+</apex:page>

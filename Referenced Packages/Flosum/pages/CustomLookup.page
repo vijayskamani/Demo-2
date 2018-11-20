@@ -1,0 +1,93 @@
+<apex:page sidebar="false" controller="Flosum.CustomLookupController" showHeader="false" docType="html-5.0">
+    <style>
+    html {
+		overflow-y:scroll;
+	}
+    .topButton, .bottomButton {
+        padding: 2px 0;
+        text-align: center;
+    }
+    </style>
+    <c:Wait />
+    <apex:form >
+        <apex:pageBlock id="metapanel">
+            <body class="hasMotif lookupTab FilterLookupPage">
+                <apex:outputPanel layout="block" styleClass="lookup">
+                    <apex:outputPanel layout="block" styleClass="bPageTitle">
+                        <apex:outputPanel layout="block" styleClass="ptBody secondaryPalette">
+                            <apex:outputPanel layout="block" styleClass="content">
+                                <apex:image styleClass="pageTitleIcon" value="/s.gif" />
+                                <h1><apex:outputText value="Lookup" /></h1>
+                            </apex:outputPanel>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel layout="block" styleClass="pbBody">
+                        <h3><apex:outputText value="Select the picklist values to add below." /></h3>
+                    </apex:outputPanel>
+                    <apex:outputPanel layout="block" styleClass="topButton">
+                        <input type="button" value="Insert Selected" title="Insert Selected" onclick="setValuesToParentPage();" class="btn" />
+                    </apex:outputPanel>
+                    <apex:outputPanel layout="block" styleClass="listRelatedObject lookupBlock">
+                        <apex:outputPanel layout="block" styleClass="bPageBlock brandSecondaryBrd secondaryPalette">
+                            <apex:outputPanel layout="block" styleClass="pbBody">
+                                <apex:dataTable value="{!metatypesList}" var="line" styleClass="list" headerClass="headerRow" rowClasses="dataRow" width="100%" >
+                                    <apex:column styleClass="actionColumn">
+                                        <apex:facet name="header"><input type="checkbox" onclick="checkAll(this);" class="disableitem">&nbsp;</input></apex:facet>
+                                        <apex:outputPanel layout="none">
+                                            <apex:inputCheckbox styleClass="checkSli" value="{!line.selected}" html-metaType="{!line.metatype}" />
+                                        </apex:outputPanel>
+                                    </apex:column>
+                                    <apex:column headerValue="Value">
+                                        <label><apex:outputText value="{!line.metatype}" /></label>
+                                    </apex:column>
+                                </apex:dataTable>
+                            </apex:outputPanel>
+                        </apex:outputPanel>
+                    </apex:outputPanel>
+                    <apex:outputPanel layout="block" styleClass="bottomButton">
+                        <input type="button" value="Insert Selected" title="Insert Selected" onclick="setValuesToParentPage();" class="btn" />
+                    </apex:outputPanel>
+                </apex:outputPanel>
+            </body>
+        </apex:pageBlock>
+    </apex:form>
+    <script>
+        function onBlurCustomFunction()
+        {
+            window.close();
+        }
+        
+        function checkAll(cb) 
+        {
+            console.log(cb.checked);
+            var elements = $('.checkSli');
+            for (var i = 0 ; i < elements.length; i++) {
+                var el = elements[i];
+                if (el != undefined) {
+                    el.checked = cb.checked;
+                }
+            }
+        }
+    
+        function setValuesToParentPage() 
+        {
+            var values = [];
+            var elements = $('.checkSli');
+            for (var i = 0 ; i < elements.length; i++) {
+                var el = elements[i];
+                var metaType = el.getAttribute('metaType')
+                if(el.checked && metaType != undefined)
+                    values.push(metaType);
+            }
+            var filterIndex = {!filterIndex};
+            var fieldName = '{!fieldName}';
+            console.log(filterIndex);
+            console.log(fieldName);
+            console.log(values);
+            window.opener.setFilterFromLookup(filterIndex,fieldName,values);
+            onBlurCustomFunction();
+        }
+        
+        //window.addEventListener("blur", setValuesToParentPage);
+    </script>
+</apex:page>

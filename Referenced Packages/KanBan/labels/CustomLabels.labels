@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+    <labels>
+        <fullName>Deal_Label</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Deal Label</shortDescription>
+        <value>Deals</value>
+    </labels>
+    <labels>
+        <fullName>Default_User_Image_URL</fullName>
+        <language>en_US</language>
+        <protected>true</protected>
+        <shortDescription>Default User Image URL</shortDescription>
+        <value>http://images.iimg.in/c/569f4771c45d324bda8b4660-4-501-0-1453279096/google/user-icon-png-pnglogocom.img?crop=1</value>
+    </labels>
+</CustomLabels>

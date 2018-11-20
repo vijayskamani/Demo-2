@@ -1,0 +1,17 @@
+<apex:page standardController="Flosum__Trail_Component__c" recordSetVar="recs" extensions="Flosum.RetrieveControllerExtension" action="{!retrieveTrailComponents}" sidebar="false">
+	<c:TrackPanel />
+	<apex:pageMessages />
+	<apex:form >	 
+		<apex:pageBlock >
+			<apex:pageBlockSection columns="1">
+				<apex:outputField value="{!parentOrg.Name}" id="orgName"/>
+				<apex:outputField value="{!parentOrg.Flosum__User_Full_Name__c}" id="usrFullName"/>
+				<apex:outputField value="{!parentOrg.Flosum__Username__c}" id="usrName"/>
+				<apex:outputField value="{!parentOrg.Flosum__Organisation_Type__c}" id="orgty"/>
+			</apex:pageBlockSection>
+			<apex:pageBlockButtons >
+	                <apex:commandButton action="{!back}" value="Back"/>
+	        </apex:pageBlockButtons>	  	
+		</apex:pageBlock>
+	</apex:form>	
+</apex:page>

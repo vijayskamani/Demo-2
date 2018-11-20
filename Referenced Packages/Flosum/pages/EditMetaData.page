@@ -1,0 +1,110 @@
+<apex:page sidebar="false"  showHeader="false" doctype="html-5.0" cache="false" id="editpg">
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/ace.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/mode-xml.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/mode-java.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/theme-chrome.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'src-min/ext-searchbox.js')}"/>   
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'beauty/forMatXML.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/pako.min.js')}"/>
+    <style type="text/css" media="screen">
+        .ace_print-margin {
+            visibility: hidden!important;
+        }
+        .grid {
+ 			display: flex;
+		}
+		.title {
+			flex: 1;
+		    height: 20px;
+		    text-align:center;
+		}
+		.editor {
+			flex: 1;
+		    height: 600px;
+		}
+	</style>
+	<apex:form id="allCompForm">
+		<!--  			Ace editor panel markup							 -->
+ 		<apex:pageBlock id="block1">
+    		<div style="float:center; text-align:center;margin:auto;" id="subblock1">
+       			<button class="btn btn-warning btn-footer"  id="btn1" type="button" onclick="cancelManual()">Cancel</button>&nbsp; 
+	       		<button class="btn btn-success btn-footer"  id="btn2" type="button"  onclick="applyChanges()">Save</button> 
+    		</div>
+     		<apex:pageBlockSection columns="1">
+     			<div class="grid">
+     				<div class="title">Base component</div>
+     				<div class="title">Component to edit</div>
+     			</div>
+     			<div class="grid">
+       				<div class="editor" id="editor2"/>
+	       			<div class="editor" id="editor"/>
+	       		</div>
+     		</apex:pageBlockSection>
+  		</apex:pageBlock>
+		<!--  			end of block for Ace editor -->
+	
+	</apex:form>
+   	<script>
+    const DEBUG_MODE = false;
+    var aceEditor;
+    var aceEditorBase;
+    var filetype;
+    var button1 = document.getElementById('btn1');
+    var button2 = document.getElementById('btn2');
+    var roMode = false;
+
+    function onBlurCustomFunction()
+    {
+        window.close();
+    }
+    
+    function open(){
+    	var userData = window.opener.$j("body").data("userData");
+    	aceEditorBase = ace.edit('editor2');
+        aceEditorBase.$blockScrolling = Infinity;
+        aceEditorBase.setTheme('ace/theme/chrome');
+   	    aceEditorBase.getSession().setUseWorker(false);
+    	aceEditor = ace.edit('editor');
+        aceEditor.$blockScrolling = Infinity;
+        aceEditor.setTheme('ace/theme/chrome');
+   	    aceEditor.getSession().setUseWorker(false);
+   	    if (userData != undefined && userData != null){
+   	    	if (userData.type === 1){
+ 	  	    	aceEditor.getSession().setMode('ace/mode/java');
+ 	  	    	aceEditorBase.getSession().setMode('ace/mode/java');
+ 	  	    }else if (userData.type === 0){
+ 	  	    	aceEditor.getSession().setMode('ace/mode/xml');
+ 	  	    	aceEditorBase.getSession().setMode('ace/mode/xml');
+ 	  	    }
+    		roMode = userData.mode;
+    		aceEditor.setValue(pako.inflate(userData.data, { to: 'string' }),1);
+    		aceEditorBase.setValue(pako.inflate(userData.base, { to: 'string' }),1);
+    		// set read-only mode for the left pane
+			aceEditorBase.commands.on("exec", function(e) { 
+			    e.preventDefault();
+    			e.stopPropagation();
+			});
+    	}
+    	filetype = userData.type;
+    }
+    open();
+    
+    function cancelManual(){
+    	console.log('canceling');
+    	onBlurCustomFunction();
+    }
+
+    function applyChanges(){
+    	var txt = aceEditor.getValue();
+    	var obj = {};
+    	obj.type = filetype;
+    	obj.data = pako.deflate(txt, { to: 'string' });
+    	window.opener.callBackText(obj);
+    	onBlurCustomFunction();
+    }
+    
+    
+    
+    
+	</script>
+</apex:page>

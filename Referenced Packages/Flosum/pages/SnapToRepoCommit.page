@@ -1,0 +1,850 @@
+<apex:page controller="Flosum.SnapToRepoCommitController" sidebar="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jsforce)}"/>
+	<apex:includeScript value="{!$Resource.Flosum__xmltojson}"/>
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__uisetup, '/js/jquery-ui.js')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.Flosum__uisetup, '/css/jquery-ui.css')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__ContentEditor, 'beauty/forMatXML.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/pako.min.js')}"/>
+	<apex:sectionHeader title="Snapshot to Repository Commit"/>
+	<apex:pagemessages id="msg"/>
+	<apex:form >
+		<apex:pageBlock id="pBlock">
+			<apex:pageblockSection columns="2">
+				<apex:pageBlockSectionItem rendered="{!if(orgOptions.size>0,true,false)}">
+	            	<apex:outputLabel value="Organization :" ></apex:outputLabel>
+	            	<apex:selectList label="Organization :" size="1" value="{!selectedOrg}" styleClass="disableitem">
+		                <apex:selectOptions value="{!orgOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!listSnapshot}" oncomplete="enableFlosumUI();" onsubmit="disableFlosumUI();"/> 
+		            </apex:selectList>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem >
+					<apex:outputLabel value="Repository" />
+					<apex:selectList size="1" value="{!selectedRepository}" styleClass="disableitem">
+		                <apex:selectOptions value="{!repositoryOptions}" />
+		                <apex:actionSupport event="onchange" onsubmit="show();" oncomplete="hide();" reRender="pBlock,msg"/>
+		            </apex:selectList>
+				</apex:pageBlockSectionItem>
+	        </apex:pageblockSection>
+            <apex:pageblockSection columns="1">
+	            <apex:pageBlockSectionItem rendered="{!IF(snapOptions.size > 0,true,false)}">
+	            	<apex:outputLabel value="Snapshot :" />
+	            	<apex:selectList label="Snapshot :" size="1" value="{!selectedSnap}" styleClass="disableitem">
+		                <apex:selectOptions value="{!snapOptions}" />
+		                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!showDetailOfSnapshot}" oncomplete="enableFlosumUI();" onsubmit="disableFlosumUI();"/> 
+		            </apex:selectList>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!selectedSnap != null && selectedSnap != ''}">
+	            	<apex:outputlabel value="{!$ObjectType.Flosum__Snapshot__c.fields.Flosum__No_of_Metadata_Items__c.label}" />
+	            	<apex:outputField value="{!snapRecord.Flosum__No_of_Metadata_Items__c}"/>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!selectedSnap != null && selectedSnap != ''}">
+	            	<apex:outputlabel value="{!$ObjectType.Flosum__Snapshot__c.fields.Flosum__No_of_Apex_Classes__c.label}" />
+	            	<apex:outputField value="{!snapRecord.Flosum__No_of_Apex_Classes__c}"/>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!selectedSnap != null && selectedSnap != ''}">
+	            	<apex:outputlabel value="{!$ObjectType.Flosum__Snapshot__c.fields.Flosum__No_of_Apex_Pages__c.label}" />
+	            	<apex:outputField value="{!snapRecord.Flosum__No_of_Apex_Pages__c}"/>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!selectedSnap != null && selectedSnap != ''}">
+	            	<apex:outputlabel value="{!$ObjectType.Flosum__Snapshot__c.fields.Flosum__No_of_Apex_Triggers__c.label}" />
+	            	<apex:outputField value="{!snapRecord.Flosum__No_of_Apex_Triggers__c}"/>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!selectedSnap != null && selectedSnap != ''}">
+	            	<apex:outputlabel value="{!$ObjectType.Flosum__Snapshot__c.fields.Flosum__No_of_Custom_Objects__c.label}" />
+	            	<apex:outputField value="{!snapRecord.Flosum__No_of_Custom_Objects__c}"/>
+	            </apex:pageBlockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!selectedSnap != null && selectedSnap != ''}">
+	            	<apex:outputlabel value="{!$ObjectType.Flosum__Snapshot__c.fields.Flosum__No_of_Custom_Labels__c.label}" />
+	            	<apex:outputField value="{!snapRecord.Flosum__No_of_Custom_Labels__c}"/>
+	            </apex:pageBlockSectionItem>
+	            <div id="progressbar" class="flpbar"></div>
+			</apex:pageblockSection>
+			<apex:pageBlockButtons >
+				<apex:commandButton action="{!startCommit}" rendered="{!selectedSnap != null && selectedSnap != '' && selectedRepository != null && selectedRepository != ''}" value="Commit To Repository" reRender="msg" onClick="disableFlosumUI();" onComplete="startCommit('{!selectedSnap}');" styleClass="disableitem"/>
+            </apex:pageBlockButtons>
+		</apex:pageBlock>
+		<apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="enableFlosumUI();">
+			<apex:param assignTo="{!message}" value="" name="newstr"/>
+		</apex:actionfunction>
+		<apex:actionfunction action="{!completeCommit}" reRender="msg" name="completeCommit" onComplete="enableFlosumUI();"/>
+		
+		<apex:actionfunction action="{!commitComponents}" reRender="msg" name="commitByApex" onComplete="commitInChunks({!isSuccess});">
+			<apex:param assignTo="{!jsonStr}" value="" name="newstr3"/>
+			<apex:param assignTo="{!commitType}" value="" name="newstr4"/>
+		</apex:actionfunction>
+	</apex:form>
+	<script>
+		Visualforce.remoting.timeout = 120000;
+		var snapshotId = '';
+		var sourceMetaItemsLi = [];
+		var snapshotRecordTypeLi = [];
+		var currentTypeIndex = 0;
+		var lastMetadataItemId = '';
+		
+		var sourceMetaItemsLi = [];
+		var snapshotAttLi = [];
+		
+		var currentAttIds = [];
+		var currentAttIndex = 0;
+		
+		var fileMap = {};
+		var normalZip = new JSZip();
+		var ComponentAttachmentWraperList = [];
+		
+		var mmap = {};
+		mmap['CustomLabel'] = true;
+	    mmap['CustomField'] = true;
+	    mmap['CompactLayout'] = true;
+	    mmap['WebLink'] = true;
+	    mmap['RecordType'] = true;
+	    mmap['ListView'] = true;
+	    mmap['FieldSet'] = true;
+	    mmap['AssignmentRule'] = true;
+	    mmap['AutoResponseRule'] = true;
+	    mmap['ValidationRule'] = true;
+	    mmap['WorkflowTask'] = true;
+		mmap['WorkflowOutboundMessage'] = true;
+		mmap['WorkflowFieldUpdate'] = true;
+		mmap['WorkflowKnowledgePublish'] = true;
+		mmap['WorkflowAlert'] = true;
+		mmap['WorkflowRule'] = true;
+		mmap['SharingOwnerRule'] = true;
+		mmap['SharingCriteriaRule'] = true;
+		mmap['BusinessProcess'] = true;
+		mmap['SharingReason'] = true;
+		mmap['EscalationRule'] = true;
+		mmap['MatchingRule'] = true;
+		mmap['ManagedTopic'] = true;
+		
+		var bundleTypes = {};
+    	bundleTypes['AuraDefinitionBundle'] = 'AuraDefinitionBundle';
+		
+		var folderMap = {};
+		folderMap['DocumentFolder'] = 'Document';
+		folderMap['DashboardFolder'] = 'Dashboard';
+		folderMap['ReportFolder'] = 'Report';
+		folderMap['EmailFolder'] = 'EmailTemplate';
+		
+		function startCommit(snapId)
+		{
+			currentTypeIndex = 0;
+			snapshotRecordTypeLi = [];
+			lastMetadataItemId = '';
+			snapshotId = snapId;
+			sourceMetaItemsLi = [];
+			
+			snapshotAttLi = [];
+			currentAttIds = [];
+			currentAttIndex = 0;
+			
+			fileMap = {};
+			normalZip = new JSZip();
+			ComponentAttachmentWraperList = [];
+			
+			if(snapId != undefined && snapId != null && snapId.length == 18)
+			{
+				console.log('--List all Types--');
+				showProgress(0);
+				Visualforce.remoting.Manager.invokeAction(
+							            '{!$RemoteAction.SnapToRepoCommitController.getAllRecordTypeIds}',
+							            snapshotId,
+							            handleSourceSnapshot
+							        );
+			}
+			else
+			{
+				enableFlosumUI();
+			}
+		}
+		
+		//To handle all metadatata types exist in source snaphsot.
+		function handleSourceSnapshot(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	for(var index=0; index< r.length; index++)
+		    	{
+		    		snapshotRecordTypeLi.push(r[index].RecordTypeName);
+		    	}
+		    	if(snapshotRecordTypeLi.length > 0)
+		    	{
+		    		currentTypeIndex = 0;
+		    		listSourceTypeComponents();
+		    	}
+		    	else
+		    	{
+		    		showProgress(100);
+		    		showMessage('No components found in snapshot.');
+		    	}
+		    }
+		    else
+		    {
+		    	showProgress(100);
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function listSourceTypeComponents()
+		{
+			if(currentTypeIndex < snapshotRecordTypeLi.length)
+			{
+				setMessageOnPage('Committing '+snapshotRecordTypeLi[currentTypeIndex]+'.');
+		    	console.log('Committing '+snapshotRecordTypeLi[currentTypeIndex]+'.');
+		    	showProgress((currentTypeIndex/snapshotRecordTypeLi.length)*100);
+		    	lastMetadataItemId = '';
+		        getMetadataItemsOneByOne();
+			}
+			else
+			{
+				showProgress(100);
+	    		//showMessage('Commit Done Successfully.#confirm');
+				completeCommit();
+			}
+		}
+		
+		function getMetadataItemsOneByOne()
+		{
+			console.log('--get metadata Items one by one--');
+			console.log('--lastMetadataItemId--'+lastMetadataItemId);
+			if(currentTypeIndex < snapshotRecordTypeLi.length)
+			{
+				Visualforce.remoting.Manager.invokeAction(
+		            '{!$RemoteAction.SnapToRepoCommitController.getAllRecords}',
+		            snapshotId,
+		            snapshotRecordTypeLi[currentTypeIndex],
+		            lastMetadataItemId,
+		            handleSourceRecords
+		        );
+	        }
+		}
+		
+		//To handle source snapshot records.
+		function handleSourceRecords(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	var li = [];
+		    	var startIndex = 0;
+		    	var metaType;
+		    	snapshotAttLi = [];
+		    	var sourceAttIds = {};
+		    	function fillMeta(){
+		    		if(startIndex < r.resultLi.length)
+			    	{
+			    		var tempIndex = (startIndex + 1000);
+			    		for(var index = startIndex; startIndex < r.resultLi.length && index < tempIndex;)
+			    		{
+			    			var meta = r.resultLi[index];
+				    		metaType = meta.MetaType;
+				    		sourceMetaItemsLi.push(meta);
+				    		sourceAttIds[meta.attId] = meta.attId;
+				    		index++;
+				    		startIndex++;
+			    		}
+			    		setTimeout(fillMeta, 0005);
+			    	}
+			    	else
+			    	{
+			    		if(r.isDone)
+			    		{
+			    			lastMetadataItemId = '';
+			    		}
+			    		else
+			    		{
+			    			lastMetadataItemId = r.lastId;
+			    		}
+			    		console.log('Committing--'+snapshotRecordTypeLi[currentTypeIndex]+'---size---'+sourceMetaItemsLi.length);
+			    		for(var tempAttId in sourceAttIds)
+		    			{
+		    				if(tempAttId != undefined)
+		    					snapshotAttLi.push(tempAttId);
+		    			}
+			    		startGettingSourceAttachments();
+			    	}
+		    	}
+		    	fillMeta();
+		    }
+		    else
+		    {
+		    	showProgress(100);
+				showMessage(e.message);
+		    }
+		}
+		
+		//To start retrieval of zip files for source snapshot.
+		function startGettingSourceAttachments()
+		{
+			if(snapshotAttLi.length > 0)
+			{
+				Visualforce.remoting.Manager.invokeAction(
+							            '{!$RemoteAction.SnapToRepoCommitController.getAttachmentList}',
+							            JSON.stringify(snapshotAttLi),
+							            handleSourceAttachmentLimit
+							        );
+			}
+			else
+			{
+				if(lastMetadataItemId != '')
+				{
+					console.log('getting next items from type---'+snapshotRecordTypeLi[currentTypeIndex]);
+					getMetadataItemsOneByOne();
+				}
+				else
+				{
+					currentTypeIndex++;
+					listSourceTypeComponents();
+				}
+			}
+		}
+		
+		//To handle zip files information for source snapshot.
+		function handleSourceAttachmentLimit(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	currentAttIds = [];
+		    	currentAttIndex = 0;
+		    	if(r.length > 0)
+		    	{
+		    		currentAttIds = r;
+		    		getAttachment();
+		    	}
+		    	else
+		    	{
+		    		showProgress(100);
+		    		showMessage('Some zip files of source snapshot are missing.');
+		    	}
+		    }
+		    else
+		    {
+		    	showProgress(100);
+		    	showMessage(e.message);
+		    }
+		}
+		
+		//To get zip file from snapshot and to read the crc codes of components from zip files. 
+		function getAttachment()
+		{
+			if(currentAttIndex < currentAttIds.length)
+			{
+				var ctAttIds = currentAttIds[currentAttIndex];
+				
+				Visualforce.remoting.Manager.invokeAction(
+		            '{!$RemoteAction.SnapToRepoCommitController.getAttachments}',
+		            JSON.stringify(ctAttIds),
+		            function handlegetAttachments(r,e){
+		            	if(e.status && r){
+		            		if(r.length > 0)
+					    	{
+					    		var attReadIndex = 0;
+					    		var readFullAtt = function(){
+					    			if(attReadIndex < r.length)
+					    			{
+					    				var att = r[attReadIndex];
+										var parentId = att.parentId;
+							    		var metaType = att.compType;
+							    		var base64str = att.base64;
+							    		
+							    		//var deltaZip = new JSZip(base64str,{base64:true});
+						    			createFileMap(metaType,base64str);
+						    			attReadIndex++;
+						    			setTimeout(readFullAtt,0001);
+					    			}
+					    			else
+					    			{
+					    				currentAttIndex++;
+					    				getAttachment();
+					    			}
+					    		}
+					    		readFullAtt();
+					    	}
+					    	else
+					    	{
+					    		showProgress(100);
+					    		showMessage('Some zip files are missing.');
+					    	}
+						}
+						else{
+							showProgress(100);
+							showMessage(e.message);
+						}
+		            }
+		        );
+			}
+			else
+	    	{
+	    		var metaCommitCount = 0;
+	    		var bodySize = 0;
+	    		var metaIdLi = [];
+	    		var componentMetaMap = {};
+	    		
+	    		var sourceItemIndex = 0;
+	    		var createSeprateZip = function(){
+	    			if(sourceItemIndex < sourceMetaItemsLi.length)
+	    			{
+	    				for(var index=0; index < sourceMetaItemsLi.length && index < 400; index++)
+	    				{
+	    					var meta = sourceMetaItemsLi[sourceItemIndex];
+			    			if(meta != undefined)
+			    			{
+								var API_Name = meta.API_Name;
+								var File_Name  = meta.File_Name;
+								var MetaType = meta.MetaType;
+								var crc32 = meta.crc32;
+								var metId = meta.metId;
+								var snapId = meta.snapId;
+								var key = '';
+								var tempMeta = new Object();
+								if(mmap[MetaType] == undefined)
+								{
+									if(folderMap[MetaType] != undefined)
+									{
+										key = folderMap[MetaType]+"#"+File_Name;
+									}
+									else
+									{
+										key = MetaType+"#"+File_Name;
+									}
+								}
+								else
+								{
+									key = MetaType+"#"+API_Name;
+								}
+								
+								
+				                if(bundleTypes[meta.MetaType] != undefined && metId != undefined)
+				                {
+				                	var fileZip = new JSZip();
+				                	var bundleArr = [];
+				                	tempMeta.Id = metId;
+									tempMeta.crc32 = '';
+									tempMeta.MetaType = MetaType;
+									tempMeta.API_Name = API_Name;
+		                            tempMeta.File_Name = File_Name;
+		                            tempMeta.key = key;
+				                	for(var mapKey in fileMap)
+									{
+										if(mapKey != undefined && mapKey.indexOf(key+'/') == 0)
+										{
+											var descriptor = {};
+											var fName = mapKey.replace(meta.MetaType+"#",'');
+											fileZip.file(fName,fileMap[mapKey].data,{binary:true});
+											descriptor.fileName = fName;
+											descriptor.crc32 = fileMap[mapKey].crc32;
+											bundleArr.push(descriptor);
+										}
+									}
+									if(bundleArr.length > 0)
+										tempMeta.crc32 = composeBundleCrc(bundleArr);
+									if(tempMeta.crc32 != '')
+									{
+										tempMeta.data = fileZip.generate({type:"base64",compression:"DEFLATE"});
+									}
+				                }
+				                else if(fileMap[key] != undefined && metId != undefined)
+				                {
+				                	var fileZip = new JSZip();
+									tempMeta.Id = metId;
+									tempMeta.crc32 = fileMap[key].crc32;
+									tempMeta.MetaType = MetaType;
+									tempMeta.API_Name = API_Name;
+		                            tempMeta.File_Name = File_Name;
+		                            tempMeta.key = key;
+		                            if(MetaType == 'PermissionSet' || MetaType == 'Profile') {
+		                            
+		                            	//fileZip.file(File_Name,fileMap[key].data,{binary:false});
+		                            	var profile = fileMap[key].data;
+		                            	fileZip.file(File_Name,unpack(profile,true),{binary:true});
+		                            }
+		                            else if(mmap[MetaType] != undefined) {
+		                            	fileZip.file(File_Name,fileMap[key].data,{binary:false});
+		                            }
+		                            else {
+		                            	fileZip.file(File_Name,fileMap[key].data,{binary:true});
+		                            }
+				                	if(fileMap[key+"-meta.xml"] != undefined)
+									{
+										tempMeta.crc32 = tempMeta.crc32+' '+fileMap[key+"-meta.xml"].crc32;
+										fileZip.file(File_Name+"-meta.xml",fileMap[key+"-meta.xml"].data,{binary:true});
+									}
+									tempMeta.data = fileZip.generate({type:"base64",compression:"DEFLATE"});
+				                }
+				                if(tempMeta.data != undefined && tempMeta.data != null)
+				                {
+					                if((metaIdLi.length > 0) && (tempMeta.data.length + bodySize > 2500000 || metaCommitCount == 2000))
+					                {
+				                        var commitObj = new Object();
+				                        commitObj.dataMap = componentMetaMap;
+				                        commitObj.metaIds = metaIdLi;
+				                        ComponentAttachmentWraperList.push(commitObj);
+				                        bodySize = 0;
+				                        componentMetaMap = {};
+				                        metaIdLi = [];
+				                        metaCommitCount = 0;
+					                }
+					                bodySize  = bodySize + tempMeta.data.length;
+					                var newObj = new Object();
+					                newObj.data=tempMeta.data;
+					                newObj.crc32=tempMeta.crc32;
+					                componentMetaMap[tempMeta.MetaType+'#'+tempMeta.API_Name] = newObj;
+					                metaIdLi.push(metId);
+					                metaCommitCount = metaCommitCount + 1;
+				                }
+							}
+	    					sourceItemIndex++;
+	    				}
+	    				setTimeout(createSeprateZip,0001);
+	    			}
+	    			else
+	    			{
+	    				if(metaIdLi.length > 0)
+			    		{
+			    			var commitObj = new Object();
+			    			commitObj.dataMap = componentMetaMap;
+		                    commitObj.metaIds = metaIdLi;
+		                    ComponentAttachmentWraperList.push(commitObj);
+			    		}
+			    		if(ComponentAttachmentWraperList.length > 0)
+				        {
+				        	commitInChunks(true);
+				        }
+				        else
+				        {
+				        	console.log('No content found for this type.');
+				        	startGettingSourceAttachments();
+				        }
+	    			}
+	    		}
+	    		setTimeout(createSeprateZip,0001);
+	    	}
+		}
+		
+		function commitInChunks(isSuccessful)
+		{
+			if(isSuccessful)
+			{
+				if(ComponentAttachmentWraperList.length > 0)
+				{
+					var commitObj = ComponentAttachmentWraperList[0];
+					var message = snapshotRecordTypeLi[currentTypeIndex];
+					commitByApex(JSON.stringify(commitObj),message);
+					ComponentAttachmentWraperList.shift();
+				}
+				else
+				{
+			    	sourceMetaItemsLi = [];
+					sourceAttIds = {};
+					fileMap = {};
+					currentAttIds = [];
+					currentAttIndex = 0;
+					ComponentAttachmentWraperList = [];
+					snapshotAttLi = [];
+			    	
+		    		startGettingSourceAttachments();
+				}
+			}
+		}
+		
+		function createFileMap(tempComponentType,base64str)
+		{
+			var tempZip = new JSZip(base64str,{base64:true});
+			if(tempComponentType == 'Profile' || tempComponentType == 'PermissionSet')
+			{
+				tempZip.remove('objects');
+                tempZip.remove('classes');
+                tempZip.remove('pages');
+                tempZip.remove('layouts');
+                tempZip.remove('tabs');
+                tempZip.remove('applications');
+                tempZip.remove('dataSources');
+                tempZip.remove('customPermissions');
+				for(var fileName in tempZip.files)
+				{
+					if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0)) 
+	            	{
+	            		var fileData = tempZip.files[fileName].asBinary();
+	            		fileMap[tempComponentType+"#"+fileName] = getCrcWithData(fileData,{compress:true});
+	            	}
+				}
+			}
+			else if(mmap[tempComponentType] == undefined)
+	    	{ 
+     			for(var fileName in tempZip.files)
+				{
+					if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+	            	{
+	            		var fileData = tempZip.files[fileName].asBinary();
+	            		fileMap[tempComponentType+"#"+fileName] = getCrcWithData(fileData);
+	            	}
+				}
+	   		}
+	   		else
+	   		{
+	   			for(var fileName in tempZip.files)
+				{
+					if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+	            	{
+	            		try {
+	            			getChildFileMap(tempComponentType,tempZip.files[fileName].asText(),fileName);
+	            		}
+						catch(err) {
+						    console.log('Execption--'+err.message);
+						}
+	            	}
+	            }
+			}
+		}
+		
+		function getChildFileMap(metaType,data,fileName)
+        {
+        	var fullName = '';
+			if(metaType != 'CustomLabel')
+			{
+				fullName = fileName.slice(fileName.indexOf("/")+1,fileName.lastIndexOf('.'))+".";
+			}
+			
+            var typeTagNameMap = {};
+            typeTagNameMap['WorkflowAlert'] = 'alerts';
+            typeTagNameMap['AssignmentRule'] = 'assignmentRule';
+            typeTagNameMap['AutoResponseRule'] = 'autoResponseRule';
+            typeTagNameMap['BusinessProcess'] = 'businessProcesses';
+            typeTagNameMap['CompactLayout'] = 'compactLayouts';
+            typeTagNameMap['EscalationRule'] = 'escalationRule';
+            typeTagNameMap['CustomField'] = 'fields';
+            typeTagNameMap['FieldSet'] = 'fieldSets';
+            typeTagNameMap['WorkflowKnowledgePublish'] = 'knowledgePublishes';
+            typeTagNameMap['WorkflowFieldUpdate'] = 'fieldUpdates';
+            typeTagNameMap['CustomLabel'] = 'labels';
+            typeTagNameMap['ListView'] = 'listViews';
+            typeTagNameMap['ManagedTopic'] = 'ManagedTopic';
+            typeTagNameMap['MatchingRule'] = 'matchingRules';
+            typeTagNameMap['WorkflowOutboundMessage'] = 'outboundMessages';
+            typeTagNameMap['WorkflowRule'] = 'rules';
+            typeTagNameMap['RecordType'] = 'recordTypes';
+            typeTagNameMap['SharingCriteriaRule'] = 'sharingCriteriaRules';
+            typeTagNameMap['SharingOwnerRule'] = 'sharingOwnerRules';
+            typeTagNameMap['SharingReason'] = 'sharingReasons';
+            typeTagNameMap['WorkflowTask'] = 'tasks';
+            typeTagNameMap['ValidationRule'] = 'validationRules';
+            typeTagNameMap['WebLink'] = 'webLinks';
+
+            var typeParantTagNameMap = {};
+            typeParantTagNameMap['AssignmentRule'] = 'AssignmentRules';
+            typeParantTagNameMap['AutoResponseRule'] = 'AutoResponseRules';
+            typeParantTagNameMap['WebLink'] = 'CustomObject';
+            typeParantTagNameMap['FieldSet'] = 'CustomObject';
+            typeParantTagNameMap['ListView'] = 'CustomObject';
+            typeParantTagNameMap['RecordType'] = 'CustomObject';
+            typeParantTagNameMap['CustomField'] = 'CustomObject';
+            typeParantTagNameMap['CompactLayout'] = 'CustomObject';
+            typeParantTagNameMap['SharingReason'] = 'CustomObject';
+            typeParantTagNameMap['ValidationRule'] = 'CustomObject';
+            typeParantTagNameMap['BusinessProcess'] = 'CustomObject';
+            typeParantTagNameMap['CustomLabel'] = 'CustomLabels';
+            typeParantTagNameMap['EscalationRule'] = 'EscalationRules';
+            typeParantTagNameMap['ManagedTopic'] = 'ManagedTopics';
+            typeParantTagNameMap['MatchingRule'] = 'MatchingRules';
+            typeParantTagNameMap['SharingOwnerRule'] = 'SharingRules';
+            typeParantTagNameMap['SharingCriteriaRule'] = 'SharingRules';
+            typeParantTagNameMap['WorkflowRule'] = 'Workflow';
+            typeParantTagNameMap['WorkflowTask'] = 'Workflow';
+            typeParantTagNameMap['WorkflowAlert'] = 'Workflow';
+            typeParantTagNameMap['WorkflowKnowledgePublish'] = 'Workflow';
+            typeParantTagNameMap['WorkflowFieldUpdate'] = 'Workflow';
+            typeParantTagNameMap['WorkflowOutboundMessage'] = 'Workflow';
+            
+
+            var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+            var childObj = {};
+            var parentObj = x2js.xml_str2json(data);
+            if(parentObj[typeParantTagNameMap[metaType]] != undefined)
+            {
+                var tempObj = parentObj[typeParantTagNameMap[metaType]];
+                if(tempObj[typeTagNameMap[metaType]] != undefined)
+                {
+                    var childDetails = tempObj[typeTagNameMap[metaType]];
+                    if(Array.isArray(childDetails))
+                    {
+                        for(var index = 0; index < childDetails.length; index++)
+                        {
+                            var childVal = childDetails[index];
+                            if(childVal != undefined && childVal.fullName != undefined)
+                            {
+                                var childLiObj = {};
+                                childLiObj._xmlns = parentObj[typeParantTagNameMap[metaType]]._xmlns;
+
+                                var childLi = [];
+                                childLi.push(childVal);
+                                childLiObj[typeTagNameMap[metaType]] = childLi;
+                                childObj[typeParantTagNameMap[metaType]] = childLiObj;
+
+                                var childXmlBeforeFormat = x2js.json2xml_str(childObj);
+                                if(childXmlBeforeFormat != undefined)
+                            	{
+	                                childXmlBeforeFormat = '<?xml version="1.0" encoding="UTF-8"?>'+childXmlBeforeFormat;
+	                                fileMap[metaType+'#'+fullName+''+childVal.fullName] = getCrcWithData(childXmlBeforeFormat,{isInnerType:true});
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if(childDetails != undefined && childDetails.fullName != undefined)
+                        {
+                            var childLiObj = {};
+                            childLiObj._xmlns = parentObj[typeParantTagNameMap[metaType]]._xmlns;
+
+                            var childLi = [];
+                            childLi.push(childDetails);
+                            childLiObj[typeTagNameMap[metaType]] = childLi;
+                            childObj[typeParantTagNameMap[metaType]] = childLiObj;
+
+                            var childXmlBeforeFormat = x2js.json2xml_str(childObj);
+                            if(childXmlBeforeFormat != undefined)
+                            {
+	                            childXmlBeforeFormat = '<?xml version="1.0" encoding="UTF-8"?>'+childXmlBeforeFormat;
+	                            fileMap[metaType+'#'+fullName+''+childDetails.fullName] = getCrcWithData(childXmlBeforeFormat,{isInnerType:true});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        function unpack(data, action){
+			if (data != undefined && action == true){
+				return pako.inflate(data,{ to: 'string' });
+			}else{
+				return data;
+			}
+		}
+		
+		const XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>';
+		function getCrcWithData(zipData,flags)
+		{
+			var r = new Object();
+			if (zipData != undefined && flags != undefined && flags.isInnerType == true){
+				zipData = vkbeautify.xml(zipData);
+			}
+			r.crc32 = normalZip.crc32(zipData,32);
+			if (flags != undefined && flags.compress == true){
+				r.data = pako.deflate(zipData, { to: 'string' });
+			}else{
+				r.data = zipData;
+			}
+			return r;
+		}
+		
+		// analyse and return bundle's crc32 sum (see the specs for detail)
+		function composeBundleCrc(bundleComponentStack) {
+			var mapComp = {'.cmp':'','.cmp-meta.xml':'' ,'Controller.js':'','Helper.js':'','.css':'','.auradoc':'','Renderer.js':'','.design':'','.svg':''};
+            var crcCode = '';
+                                                                
+			for (var i = 0; i < bundleComponentStack.length; i++){
+                 var zipFileName = bundleComponentStack[i].fileName;
+                 if(zipFileName != undefined)
+                 {
+          			var index = getBundleExt(zipFileName);
+                    if (index > -1){
+        	          	var ext = zipFileName.substr(index)
+    	                mapComp[ext] = bundleComponentStack[i].crc32;
+                    }
+                 }
+             }
+             crcCode = mapComp['.cmp']+','+mapComp['.cmp-meta.xml']+ ','+mapComp['Controller.js']+','+mapComp['Helper.js']+
+                                      ','+mapComp['.css']+','+mapComp['.auradoc']+','+mapComp['Renderer.js']+','+mapComp['.design']+','+mapComp['.svg'];
+             return crcCode;
+		}
+		
+		function getBundleExt(str) {
+        	var index = str.lastIndexOf('.js');
+        	if (index > -1){// verify 3 exts
+        		index = str.lastIndexOf('Controller.js');
+        		if (index == -1){
+	        		index = str.lastIndexOf('Helper.js');
+			   		if (index == -1){
+	        			index = str.lastIndexOf('Renderer.js');
+       				}
+        		}
+        		return index;
+        	}
+        	index = str.lastIndexOf('.cmp-meta.xml');
+        	if (index == -1){
+        		return str.lastIndexOf('.');
+        	}
+        	return index;
+        }
+		
+		function mapCounter(componentMetaMap)
+		{
+			for(var key in componentMetaMap)
+			{
+				return true;
+			}
+			return false;
+		}
+		
+		function setMessageOnPage(msg)
+		{
+			var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+				var childVal = parentVal.find('.messageText');
+				if(childVal != undefined)
+				{
+					if(msg.indexOf('#') > -1)
+					{
+						var li = msg.split('#');
+						var strHtml = '<span></span>';
+						for(var index=0; index < li.length; index++)
+							strHtml+= '<li>'+li[index]+'</li>';
+						childVal.html(strHtml);
+					}
+					else
+						childVal.text(msg);
+				}
+			}
+		}
+		
+		function showProgress(pVal)
+		{
+			var pb = $("#progressbar");
+			if(pb != undefined)
+			{
+				pb.progressbar({value: pVal});
+			}
+		}
+		
+		function disableFlosumUI()
+		{
+			var toDisableItems = document.getElementsByClassName('disableitem');
+			for (var i = 0; i < toDisableItems.length; i++) 
+			{
+				if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit' || toDisableItems[i].type == 'select-one' || toDisableItems[i].type == 'text' || toDisableItems[i].type == 'checkbox')
+				{
+					toDisableItems[i].disabled = true;
+					if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit')
+						toDisableItems[i].className += ' btnDisabled';
+				}
+			}
+		}
+		
+		function enableFlosumUI()
+		{
+			var toDisableItems = document.getElementsByClassName('disableitem');
+			for (var i = 0; i < toDisableItems.length; i++) 
+			{
+				if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit' || toDisableItems[i].type == 'select-one' || toDisableItems[i].type == 'text' || toDisableItems[i].type == 'checkbox')
+				{
+					toDisableItems[i].disabled = false;
+					if(toDisableItems[i].type == 'button' || toDisableItems[i].type =='submit')
+						toDisableItems[i].className = toDisableItems[i].className.replace(' btnDisabled','');
+				}
+			}
+		}
+	</script>
+</apex:page>

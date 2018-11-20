@@ -1,0 +1,4 @@
+<apex:page standardController="Flosum__Snapshot__c" recordSetVar="var" extensions="Flosum.RedirectController" action="{!redirectComparison}" sidebar="false">
+	<c:TrackPanel />
+	<apex:pagemessages id="msg"/>
+</apex:page>

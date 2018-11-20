@@ -1,0 +1,167 @@
+<apex:page controller="Flosum.ComponentComparisonDetailController" sidebar="false" doctype="html-5.0" standardStylesheets="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jquery)}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__uisetup, '/js/bootstrap.min.js')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.Flosum__uisetup, '/css/bootstrap-theme.min.css')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.Flosum__uisetup, '/css/bootstrap.min.css')}"/>
+	<apex:stylesheet value="{!$Resource.Flosum__DiffCSS}"/>
+	<style>
+		.diff tbody th {
+		    padding-left: 0!important;
+		}
+	</style>
+	<apex:form id="form">
+		<apex:pagemessages id="msg"/>
+        <apex:pageBlock title="{!JSENCODE(componentType)} Comparison" >
+			<apex:pageBlockbuttons >
+            	<apex:commandbutton value="Back" onClick="show();" rendered="{!redirectTo == 'MetadataComparison' || redirectTo == 'ComponentComparison' || redirectTo == 'Branch'}" action="{!backToCompare}" onComplete="hide();"/>
+                <apex:commandbutton value="Previous" disabled="{!if(compareIndex < 1,true,false)}" action="{!previous}" onComplete="compare('baseDivToStoreContent','targetDivToShowComparison');" rerender="form" rendered="{!redirectTo != 'Branch'}"/>
+                <apex:commandbutton value="Next" disabled="{!if(compareIndex+1 < sourceDetailLi.size,false,true)}" action="{!next}" onComplete="compare('baseDivToStoreContent','targetDivToShowComparison');" rerender="form" rendered="{!redirectTo != 'Branch'}"/>
+			</apex:pageBlockbuttons>
+            <apex:pageBlockSection columns="1" rendered="{!if(componentType != null,true,false)}">
+            	<input type="text" id="contextSize" value="10000" style="display:none"/>
+           		<p id="sourceSnapshotName"></p>
+            	<div id="baseDivToStoreContent">
+	            </div>
+	            <div id="targetSnapshotName"></div>
+	            <div id="targetDivToShowComparison">
+	            </div>
+	        </apex:pageBlockSection>
+		</apex:pageBlock>
+		<apex:inputHidden id="source_fileName" value="{!source.fileName}" />
+        <apex:inputHidden id="target_fileName" value="{!target.fileName}" />
+        
+        <apex:inputHidden id="source_fullname" value="{!source.fullName}" />
+        <apex:inputHidden id="target_fullname" value="{!target.fullName}" />
+        
+        <apex:inputHidden id="source_version" value="{!source.version}" />
+        <apex:inputHidden id="target_version" value="{!target.version}" />
+        
+        <apex:inputHidden id="componentType" value="{!componentType}" />
+        
+        <apex:inputHidden id="source_contentId" value="{!source.contentId}" />
+        <apex:inputHidden id="target_contentId" value="{!target.contentId}" />
+        
+        <apex:inputHidden id="source_parentName" value="{!source.parentName}" />
+        <apex:inputHidden id="target_parentName" value="{!target.parentName}" />
+        
+        <apex:inputHidden id="source_parentId" value="{!source.parentId}" />
+        <apex:inputHidden id="target_parentId" value="{!target.parentId}" />
+	    <apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="hide();">
+			<apex:param assignTo="{!message}" value="" name="newstr"/> 
+		</apex:actionfunction>
+	</apex:form>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__AuraDiff)}" />
+	<script>
+		var contentIds = '{!JSENCODE(contentIds)}';
+    	Visualforce.remoting.timeout = 120000;
+    	var currentAttIds = [];
+        var currentAttIndex = 0;
+        var detailDataMap = {};
+        
+        $( document ).ready(function() {
+		    getDetailsOfAttachments();
+		});
+    	
+    	function getDetailsOfAttachments()
+        {
+        	currentAttIds = [];
+        	currentAttIndex = 0;
+        	detailDataMap = {};
+        	if(contentIds != '')
+    		{
+    			show();
+	            var tempIdLi = [];
+	            tempIdLi = contentIds.split(',')
+	            Visualforce.remoting.Manager.invokeAction(
+	                '{!$RemoteAction.ComponentComparisonDetailController.getAttachmentList}',
+	                JSON.stringify(tempIdLi),
+	                handleAttachmentLimit
+	            );
+            }
+        }
+        
+        //To handle zip files information.
+        function handleAttachmentLimit(r,e)
+        {
+            if(e.status && r) 
+            {
+                currentAttIds = [];
+                currentAttIndex = 0;
+                if(r.length > 0)
+                {
+                    currentAttIds = r;
+                    getAttachment();
+                }
+                else
+                {
+                    hide();
+                }
+            }
+            else
+            {
+                showMessage(e.message);
+            }
+        }
+        
+        //To get zip file from snapshot and to read the crc codes of components from zip files. 
+        function getAttachment()
+        {
+            if(currentAttIndex < currentAttIds.length)
+            {
+                var ctAttIds = currentAttIds[currentAttIndex];
+                
+                Visualforce.remoting.Manager.invokeAction(
+                    '{!$RemoteAction.ComponentComparisonDetailController.getAttachments}',
+                    JSON.stringify(ctAttIds),
+                    function handlegetAttachments(r,e){
+                        if(e.status && r){
+                            if(r.length > 0)
+                            {
+                                console.log('Getting content from '+r.length+' attachments.');
+                                var attReadIndex = 0;
+                                var readFullAtt = function(){
+                                    if(attReadIndex < r.length)
+                                    {
+                                        var att = r[attReadIndex];
+                                        var parentId = att.parentId;
+                                        var metaType = att.compType;
+                                        var base64str = att.base64;
+                                        var zip = new JSZip(base64str, {base64:true});
+                                        for(var fileName in zip.files)
+						                {
+						                    if(fileName != undefined) 
+						                        detailDataMap[parentId+'#'+metaType+"#"+fileName] = zip.files[fileName].asText();
+						                }
+                                        attReadIndex++;
+                                        setTimeout(readFullAtt, 0005);
+                                    }
+                                    else
+                                    {
+                                        currentAttIndex++;
+                                        getAttachment();
+                                    }
+                                }
+                                readFullAtt();
+                            }
+                            else
+                                hide();
+                        }
+                        else
+                        {
+                            showMessage(e.message);
+                        }
+                    }
+                );
+            }
+            else
+            {
+                console.log(detailDataMap);
+                compare('baseDivToStoreContent','targetDivToShowComparison');
+            }
+        }
+	</script>
+</apex:page>

@@ -1,0 +1,4 @@
+<apex:page standardController="Flosum__Commit__c" sidebar="false">
+<c:TrackPanel />
+<h1>You can't edit a Commit record.</h1>
+</apex:page>

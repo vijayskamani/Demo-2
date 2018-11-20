@@ -1,0 +1,624 @@
+<apex:page standardController="Flosum__Organisation__c" extensions="Flosum.ScheduleSnapshotController" action="{!orgAction}" sidebar="false" doctype="html-5.0">
+	<c:TrackPanel />
+	<c:Wait />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__Utility, 'JS/angular.min.js')}"/>
+	<style>
+		span#filterLabelId-_help {
+            margin-right: 24px;
+        }
+        td.filterheaderclass {
+            padding-left: 15px;
+        }
+        th.filterheaderclass {
+            padding-left: 15px;
+        }
+        label.filterLabelLogiclabel {
+            color: rgb(79, 74, 96);
+            font-size: 11px;
+        }
+        th.filterheaderclass {
+            color: rgb(79, 74, 96);
+            font-size: 11px;
+        }
+        .daysLabel{
+            color: rgb(79, 74, 96);
+            font-size: 11px;
+        }
+        
+        .switchLink{
+            float: right;
+        }
+        
+        a.disablePageLink{
+        	pointer-events : none;
+        }
+	</style>
+	<apex:form id="meta">
+		<div id="defaultMsg" />
+		<apex:pagemessages id="msg"/>
+		<apex:actionfunction action="{!redirectToSnapshot}" reRender="msg" name="redirectToSnapshot" onComplete="hide();">
+			<apex:param assignTo="{!metadataTypesForBatch}" value="" name="metadataTypesForBatch"/>
+			<apex:param assignTo="{!filterJSON}" value="" name="filterJSON"/>
+			<apex:param assignTo="{!noOfDays}" value="" name="noOfDays"/>
+	  	</apex:actionfunction>
+		<div ng-app="snapshotRetrieval" >
+            <div ng-controller ="RetrieveChangesController" id="angularControllerId">
+                <div class="ng-cloak">
+                	<fieldset ng-disabled="disableUi">
+                		<apex:pageBlock html-ng-show="CommitStep == 1" title="Organization ({!Flosum__Organisation__c.Name})" rendered="{!Flosum__Organisation__c.Name != null && authDetails.isSuccess && metadataTypeStr != null && metadataTypeStr != ''}">
+                            <apex:pageBlockbuttons location="top">
+                                <apex:commandbutton value="Schedule Snapshot" reRender="none" html-ng-click="filterOrgComponents();" onClick="return false;"  html-ng-disabled="disableRetrieveChangesButton" />
+                            </apex:pageBlockbuttons>
+                            <apex:pageBlockSection id="cronBlock" columns="1">
+                            	<apex:pageBlockSectionItem >
+						        	<apex:outputLabel value="Target Org" />
+						            <apex:outputField value="{!Flosum__Organisation__c.Name}"/>
+						        </apex:pageBlockSectionItem>
+						    	<apex:pageBlockSectionItem >
+						    		<apex:outputLabel value="Frequency"/>
+						    		<apex:selectRadio value="{!selectedFrequency}" layout="pageDirection">
+					          			<apex:selectOptions value="{!frequencyOptions}"/>
+					          			<apex:actionSupport event="onchange" rerender="msg,cronBlock" onsubmit="show();" oncomplete="hide();"/>
+					          		</apex:selectRadio>
+					          	</apex:pageBlockSectionItem>
+								<apex:pageBlockSectionItem rendered="{!selectedFrequency == 'Weekly'}">
+					          		<apex:outputLabel value="Recurs every week on"/>
+					          		<apex:selectCheckboxes value="{!selecteddayOfWeek}" layout="pageDirection">
+								    	<apex:selectOptions value="{!dayOfWeekOptions}"/>
+									</apex:selectCheckboxes>
+						    	</apex:pageBlockSectionItem>
+						    	<apex:pageBlockSectionItem rendered="{!selectedFrequency == 'Monthly'}">
+									<apex:outputLabel value="On Day"/>
+									<apex:outputPanel >
+						           		<apex:selectList size="1" value="{!selectedMonthlyDate}" styleClass="disableitem">
+							                <apex:selectOptions value="{!monthlyDateOptions}"/>
+							            </apex:selectList>
+							            <apex:outputLabel value="of every month"/>
+						            </apex:outputPanel>
+						    	</apex:pageBlockSectionItem>
+						    	<apex:pageBlockSectionItem >
+						    		<apex:outputLabel value="Preferred Start Time"/>
+						    		<apex:outputPanel >
+							    		<apex:selectList size="1" value="{!selectedPreferedTime}" styleClass="disableitem">
+							                <apex:selectOptions value="{!preferedTimeOptions}"/>
+							            </apex:selectList>
+							            <apex:outputLabel value="And" styleClass="inlineLabels"/>
+							    		<apex:selectList size="1" value="{!selectedPreferedMinute}" styleClass="disableitem">
+							                <apex:selectOptions value="{!preferedTimeMinuteOptions}"/>
+							            </apex:selectList>
+							            <apex:outputLabel value="Minutes" styleClass="inlineLabels"/>
+						            </apex:outputPanel>
+						    	</apex:pageBlockSectionItem>
+                            </apex:pageBlockSection>
+                            <apex:pageBlockSection id="block" html-ng-show="!disableRetrieveChangesButton" columns="1">
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Retrieve changes in the last"/>
+                                    <apex:outputPanel ><apex:input label="Retrieve changes in the last" value="{!lastModifiedInDays}" type="number" html-ng-model="filterDays" html-min="0" required="true" html-max="3650" styleClass="disableitem"/><apex:outputLabel styleClass="daysLabel" value="days"/></apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputLabel value="Retrieve standard components"/>
+                                    <apex:inputCheckbox html-ng-model="IsRetrieveStandard"/>
+                                </apex:pageBlockSectionItem>
+                            </apex:pageBlockSection>
+                            <apex:pageBlockSection columns="1">
+                                <apex:pageBlockSectionItem >
+                                    <apex:outputPanel >
+                                        <table ng-show="filterList.length > 0">
+                                            <thead>
+                                                <tr>
+                                                    <th class="filterheaderclass"></th>
+                                                    <th class="filterheaderclass">Field</th>
+                                                    <th class="filterheaderclass">Operator</th>
+                                                    <th class="filterheaderclass">Value</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr ng-repeat="filterRow in filterList">
+                                                    <td class="filterheaderclass">{{ $index+1 +'.'}}</td>
+                                                    <td class="filterheaderclass">
+                                                        <select ng-model="filterRow.field">
+                                                            <option value="{{''}}">--None--</option>
+                                                            <option ng-repeat="(key, value) in fieldList" value="{{key}}">{{value}}</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="filterheaderclass">
+                                                        <select ng-model="filterRow.operator">
+                                                            <option value="{{''}}">--None--</option>
+                                                            <option ng-repeat="operatorOne in compareList" value="{{operatorOne}}">{{operatorOne}}</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="filterheaderclass">
+                                                        <input type="text" id="jstextboxval{{$index}}" ng-model="filterRow.value" class="tagsclass" filterIndex="{{$index}}" size="50"/>
+                                                    </td>
+                                                    <td class="filterheaderclass" ng-show="filterRow.field == 'type'">
+                                                        <a class="{{disableUi == true ? 'disablePageLink' : ''}}" ng-click="createLookupLink(filterRow.field,$index,filterRow.value);">
+                                                            <img src="/s.gif" alt="Org Lookup (New Window)" class="lookupIcon" onblur="this.className = 'lookupIcon';" 
+                                                            onfocus="this.className = 'lookupIconOn';" onmouseout="this.className = 'lookupIcon';this.className = 'lookupIcon';" 
+                                                            onmouseover="this.className = 'lookupIconOn';this.className = 'lookupIconOn';"/>
+                                                        </a>
+                                                    </td>
+                                                    <td class="filterheaderclass" ng-show="!enableFilterLogic">
+                                                    AND
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </apex:outputPanel>
+                                </apex:pageBlockSectionItem>
+                                <apex:pageBlockSectionItem >
+                                    <a class="{{disableUi == true ? 'disablePageLink' : ''}}" id="link-2" href="" ng-click="addRowToSearch();">Add Row</a>
+                                </apex:pageBlockSectionItem>
+                            </apex:pageBlockSection>
+						</apex:pageBlock>
+                	</fieldset>
+                </div>
+            </div>
+        </div>
+	</apex:form>
+	<script>         
+        var myApp = angular.module("snapshotRetrieval", []);
+        myApp.controller("RetrieveChangesController", ['$scope',function($scope) {
+			/****************************Default Properties*******************************/
+        	
+			$scope.metadataTypeAvailableStr = '{!JSENCODE(metadataTypeStr)}';
+			$scope.metaTypeLi = [];
+			$scope.selectedTypes = []
+            $scope.disableUi = false;
+			$scope.visibleStateConditionStr = '';
+			$scope.CommitStep = 1;
+			$scope.filterDays = 14;
+			$scope.filterTime;
+			$scope.IsRetrieveStandard = false;
+	        
+            /**************************************************************************/
+            /****************************Filter Properties*****************************/
+			$scope.enableFilterLogic = false;
+			$scope.filterList = [];
+            $scope.compareList = [];
+            $scope.compareList.push('equals');
+            $scope.compareList.push('not equals');
+            $scope.compareList.push('contains');
+            $scope.compareList.push('starts with');
+            $scope.compareList.push('does not contain');
+            $scope.fieldList = {};
+            $scope.fieldList['type'] = 'Component Type';
+            $scope.fieldList['fullName'] = 'Component Name';
+            $scope.fieldList['lastModifiedByName'] = 'Changed By';
+            //$scope.fieldList['createdByName'] = 'Created By';
+            $scope.mainFilterList = [];
+
+            if('{!JSENCODE(metadataTypeStr)}' != '')
+            {
+                var metaStrLi = $scope.metadataTypeAvailableStr.split(',');
+                for(var listIndex = 0; listIndex < metaStrLi.length; listIndex++)
+                {
+                    $scope.metaTypeLi.push(metaStrLi[listIndex]);
+                }
+            }
+			
+            $scope.filterOrgComponents = function() {
+            	$scope.disableUi = true;
+            	console.log('$scope.filterDays-'+$scope.filterDays);
+            	
+         		if($scope.filterDays != undefined)
+				{
+					$scope.filterSnapshotItems();
+					$scope.defaultFilterType();
+					if($scope.selectedTypes != undefined && $scope.selectedTypes.length > 0)
+					{
+						var filterDetail = {};
+	                    filterDetail.IsRetrieveStandard = $scope.IsRetrieveStandard;
+	                    filterDetail.filterList = $scope.mainFilterList;
+	                    var filterInfoJSON = JSON.stringify(filterDetail);
+						$scope.disableUi = false;
+		            	redirectToSnapshot(JSON.stringify($scope.selectedTypes), filterInfoJSON, $scope.filterDays);
+					}
+					else
+					{
+						$scope.showMessage('Please select a component type.','ERROR');
+					}
+				}
+	           	else
+	           	{
+	           		if($scope.filterDays == undefined || $scope.filterDays < 0)
+	           			$scope.showMessage('Please enter a positive number between 0 to 3650.','ERROR');
+	           	}
+       		};
+
+            /**********************************************************************/
+            /****************************Filter Methods****************************/
+                      
+            $scope.addRowToSearch = function(){
+                if($scope.filterList.length < 9)
+                {
+                    var filterRow = {};
+                    filterRow.field = '';
+                    filterRow.operator = '';
+                    filterRow.value = '';
+                    $scope.filterList.push(filterRow);
+                }
+            }
+
+            $scope.applySearch = function(){
+                $scope.mainFilterList = [];
+                for(var index=0; index < $scope.filterList.length; index++)
+                {
+                    var filterRow = $scope.filterList[index];
+                    $scope.mainFilterList.push(JSON.parse(JSON.stringify(filterRow)));
+                }
+            }
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.addRowToSearch();
+            $scope.applySearch();
+            
+            
+            $scope.createLookupLink = function(fieldName,filterIndex,fieldValue){
+                var link = '{!customLookupPageName}fieldName='+fieldName+'&filterIndex='+filterIndex+'&fieldValue='+fieldValue;
+                console.log(link);
+                window.open(link, 'MsgWindow', 'width=600,height=600,resizable=1,scrollbars=1');
+            };
+            
+            $scope.setFilterRow = function(filterIndex,fieldType,selectedItems){
+                if(filterIndex < $scope.filterList.length)
+                {
+                    var filterRow = $scope.filterList[filterIndex];
+                    var tempStr = '';
+                    angular.forEach(selectedItems, function(str) {
+                        if(tempStr == '')
+                            tempStr += str;
+                        else
+                            tempStr += ','+str;
+                    });
+                    $scope.$apply(function() {
+                        filterRow.value = tempStr;
+                    });
+                }
+            };
+            /**********************************************************************/
+            /****************************Utility Methods*****************************/
+			
+            $scope.defaultFilterType = function() {
+            	$scope.selectedTypes = [];
+	            $scope.allTypeUniqueMap = {};
+	            var localFilterList = [];
+	            var tempFilterList = $scope.filterList;
+	            for(var index=0; index < tempFilterList.length; index++)
+	            {
+	                var filterRow = tempFilterList[index];
+	                if(filterRow != undefined && filterRow.field == 'type' && filterRow.value != undefined && filterRow.value != '' && filterRow.operator != undefined && filterRow.operator != '')
+	                {
+	                    localFilterList.push(filterRow);
+	                }
+	            }
+	            var angMetaTypeLi = $scope.metaTypeLi;
+	            for(var index=0; index < angMetaTypeLi.length; index++)
+	            {
+	                var metaType = angMetaTypeLi[index];
+	                if(metaType != undefined && metaType != '' )
+	                {
+	                    if($scope.enableFilterLogic)
+	                    {
+	                        var IsSingleTypeFilter = false;
+	                        var compoentTypesSelectedInFilterLi = [];
+	                        for(var index2=0; index2 < localFilterList.length; index2++)
+	                        {
+	                            var filterRow = localFilterList[index2];
+	                            var filterVal = filterRow.value.toLowerCase();
+	                            var metadataTypeValue = metaType.toLowerCase();
+	                            if(filterRow.field == 'type' && filterRow.operator == 'equals')
+	                            {
+	                            	IsSingleTypeFilter = true;
+	                            	var allMetadataTypes = filterVal.split(',');
+	                            	for(var tempFilterIndex in allMetadataTypes)
+	                            	{
+	                            		if(tempFilterIndex < allMetadataTypes.length && metadataTypeValue == allMetadataTypes[tempFilterIndex])
+	                            		{
+	                            			compoentTypesSelectedInFilterLi.push(metaType);
+	                            		}
+	                            	}
+	                            }
+	                        }
+	                        if(IsSingleTypeFilter)
+	                        {
+	                        	if(compoentTypesSelectedInFilterLi.length > 0)
+                           		{
+		                        	$scope.selectedTypes.push(metaType);
+		                        	$scope.allTypeUniqueMap[metaType] = metaType;
+		                        }
+	                        }
+	                        else
+	                        {
+	                        	$scope.selectedTypes.push(metaType);
+	                        	$scope.allTypeUniqueMap[metaType] = metaType;
+	                        }
+	                    }
+	                    else
+	                    {
+	                        var finalResult = true;
+	                        for(var index2=0; index2 < localFilterList.length; index2++)
+	                        {
+	                            var filterRow = localFilterList[index2];
+	                            var filterVal = filterRow.value.toLowerCase();
+	                            if(filterVal == 'all' && filterRow.operator == 'equals')
+	                            {}
+	                            else
+	                            {
+	                                finalResult = $scope.checkValidCondition(metaType.toLowerCase(),filterVal,filterRow.operator,'type');
+	                                if(!finalResult)
+	                                    break;
+	                            }
+	                        }
+	                        if(finalResult)
+	                        {
+	                            $scope.selectedTypes.push(metaType);
+	                        	$scope.allTypeUniqueMap[metaType] = metaType;
+	                        }
+	                    }
+	                }
+	            }
+            };
+            
+            $scope.filterSnapshotItems = function(){
+            	$scope.applySearch();
+            	$scope.visibleStateConditionStr = '';
+	            if($scope.enableFilterLogic)
+	            {
+	                $scope.visibleStateConditionStr = $scope.filterCondition;
+	            }
+	            else
+	            {
+	                for(var index=0; index < $scope.mainFilterList.length; index++)
+	                {
+	                    var filterRow = $scope.mainFilterList[index];
+	                    if(filterRow != undefined && filterRow.value != undefined && filterRow.value != '' && filterRow.operator != undefined && filterRow.operator != '')
+	                    {
+	                        if($scope.visibleStateConditionStr == '')
+	                            $scope.visibleStateConditionStr += (index+1)+' ';
+	                        else
+	                            $scope.visibleStateConditionStr += 'AND '+(index+1)+' ';
+	                    }
+	                }
+	            }
+            };
+	        
+            $scope.checkValidCondition = function(fieldValue,filterVal,filterOperator,fieldName) {
+	            if(filterOperator == 'equals')
+	            {
+	                if(fieldName == 'type' || fieldName == 'lastModifiedByName' || fieldName == 'createdByName')
+	                {
+	                    var typeLi = filterVal.split(',');
+	                    for(var index = 0; index < typeLi.length; index++)
+	                    {
+	                        if(fieldValue == typeLi[index])
+	                            return true;
+	                    }
+	                }
+	                else
+	                {
+	                    if(fieldValue == filterVal)
+	                    {
+	                        return true;
+	                    }
+	                }
+	            }
+	            else if(filterOperator == 'not equals')
+	            {
+	                if(fieldName == 'type' || fieldName == 'lastModifiedByName' || fieldName == 'createdByName')
+	                {
+	                    var finalResult = true;
+	                    var typeLi = filterVal.split(',');
+	                    for(var index = 0; index < typeLi.length; index++)
+	                    {
+	                        if(fieldValue == typeLi[index])
+	                        {
+	                            finalResult = false;
+	                            break;
+	                        }
+	                    }
+	                    return finalResult;
+	                }
+	                else
+	                {
+	                    if(fieldValue != filterVal)
+	                    {
+	                        return true;
+	                    }
+	                }
+	            }
+	            else if(filterOperator == 'contains' && fieldValue != undefined && fieldValue != null)
+	            {
+	                if(fieldName == 'type')
+	                {
+	                    var typeLi = filterVal.split(',');
+	                    for(var index = 0; index < typeLi.length; index++)
+	                    {
+	                        if(fieldValue.indexOf(typeLi[index]) > -1)
+	                            return true;
+	                    }
+	                }
+	                else
+	                {
+	                    if(fieldValue.indexOf(filterVal) > -1)
+	                    {
+	                        return true;
+	                    }
+	                }
+	            }
+	            else if(filterOperator == 'starts with' && fieldValue != undefined && fieldValue != null)
+	            {
+	                if(fieldName == 'type')
+	                {
+	                    var typeLi = filterVal.split(',');
+	                    for(var index = 0; index < typeLi.length; index++)
+	                    {
+	                        if(fieldValue.indexOf(typeLi[index]) == 0)
+	                            return true;
+	                    }
+	                }
+	                else
+	                {
+	                    if((fieldValue.indexOf(filterVal) == 0))
+	                    {
+	                        return true;
+	                    }
+	                }
+	            }
+	            else if(filterOperator == 'does not contain' && fieldValue != undefined && fieldValue != null)
+	            {
+	                if(fieldName == 'type')
+	                {
+	                    var finalResult = true;
+	                    var typeLi = filterVal.split(',');
+	                    for(var index = 0; index < typeLi.length; index++)
+	                    {
+	                        if(fieldValue.indexOf(typeLi[index])  > -1)
+	                        {
+	                            finalResult = false;
+	                            break;
+	                        }
+	                    }
+	                    return finalResult;
+	                }
+	                else
+	                {
+	                    if(fieldValue.indexOf(filterVal) < 0)
+	                    {
+	                        return true;
+	                    }
+	                }
+	            }
+	            return false;
+	        };
+	        
+	        $scope.showMessage = function(Message_Str,Message_Type) {
+	        	var parentVal = $("[id$='msg']");
+				if(parentVal != undefined)
+				{
+				    parentVal.html('');
+				    if(Message_Str != '')
+				    {
+					    if(Message_Type == 'ERROR')
+					    {
+					    	var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+											'<div class="message errorM3" role="alert">'+
+												'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+													'<tbody>'+
+														'<tr valign="top">'+
+															'<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+															'<td class="messageCell">'+
+																'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																	'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+																		'<h4>Error:</h4>'+
+																	'</span>'+Message_Str+'<br>'+
+																'</div>'+
+															'</td>'+
+														'</tr>'+
+														'<tr>'+
+															'<td></td>'+
+															'<td></td>'+
+														'</tr>'+
+													'</tbody>'+
+												'</table>'+
+											'</div>'+
+										'</span>';
+							parentVal.append(childVal);
+							$scope.disableUi = false;
+					    }
+					    else if(Message_Type == 'INFO')
+					    {
+							var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+												'<div class="message infoM3" role="alert">'+
+													'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+														'<tbody>'+
+															'<tr valign="top">'+
+																'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+																'<td class="messageCell">'+
+																	'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																		'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																			'<h4></h4>'+
+																		'</span>'+Message_Str+'<br>'+
+																	'</div>'+
+																'</td>'+
+															'</tr>'+
+															'<tr>'+
+																'<td></td>'+
+																'<td></td>'+
+															'</tr>'+
+														'</tbody>'+
+													'</table>'+
+												'</div>'+
+											'</span>';
+							parentVal.append(childVal);
+						}
+					}
+				}
+	        };
+	        /**********************************************************************/
+        }]);
+        
+        function setDefaultMessageOnPage(msg)
+		{
+			var parentVal = $("[id$='defaultMsg']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+				var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+									'<div class="message infoM3" role="alert">'+
+										'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+											'<tbody>'+
+												'<tr valign="top">'+
+													'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+													'<td class="messageCell">'+
+														'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+															'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																'<h4></h4>'+
+															'</span>'+msg+'<br>'+
+														'</div>'+
+													'</td>'+
+												'</tr>'+
+												'<tr>'+
+													'<td></td>'+
+													'<td></td>'+
+												'</tr>'+
+											'</tbody>'+
+										'</table>'+
+									'</div>'+
+								'</span>';
+				parentVal.append(childVal);				
+			}
+		}
+        
+        function setFilterFromLookup(filterIndex,fieldType,selectedItems)
+        {
+        	console.log(filterIndex);
+        	console.log(fieldType);
+        	console.log(selectedItems);
+            //angular.element('#angularControllerId').scope().setFilterRow(filterIndex,fieldType,selectedItems);
+            var filterId = '#jstextboxval'+filterIndex;
+            var tempFilterRow = $(filterId);
+            console.log(tempFilterRow);
+            if(tempFilterRow != undefined)
+            {
+            	var tempStr = '';
+				if(selectedItems != undefined)
+	            {
+		            for(var index in selectedItems)
+		            {
+		            	if(index < selectedItems.length)
+		            	{
+			            	if(tempStr == '')
+			                	tempStr += selectedItems[index];
+			            	else
+			                	tempStr += ','+selectedItems[index];
+		                }
+		            }
+	            }
+	            tempFilterRow.val(tempStr);
+				tempFilterRow.trigger("change");
+            }
+        }
+	</script>
+</apex:page>

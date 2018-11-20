@@ -1,0 +1,72 @@
+<apex:page standardController="Flosum__Organisation__c" extensions="Flosum.ScheduleTestExecutionController" action="{!orgAction}" sidebar="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<style>
+		.inlineLabels{
+			margin-left: 5px;
+    		margin-right: 5px;
+    		color: rgb(79, 74, 96);
+   			font-size: 11px;
+		}
+	</style>
+	<apex:form >
+		<apex:pagemessages id="msg"/>
+		<apex:pageBlock title="Schedule Test Executions" id="block">
+			<apex:pageBlockButtons >
+				<apex:commandButton value="Schedule Test Execution" action="{!testExecution}" rendered="{!IF(authSuccesfull,true,false)}" onClick="show();" onComplete="hide();" reRender="msg" styleClass="disableitem"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlockSection columns="1">
+		    	<apex:pageBlockSectionItem >
+		        	<apex:outputLabel value="Target Org" />
+		            <apex:outputField value="{!Flosum__Organisation__c.Name}"/>
+		        </apex:pageBlockSectionItem>
+		    	<apex:pageBlockSectionItem >    
+		            <apex:outputLabel value="Run Test" />
+					<apex:selectList size="1" value="{!selectedRunTest}" styleClass="disableitem">
+		                <apex:selectOptions value="{!runTestOption}"/>
+<!-- 		                <apex:actionSupport event="onchange" rerender="msg,block" onsubmit="show();" oncomplete="hide();"/> -->
+		            </apex:selectList>
+		        </apex:pageBlockSectionItem>
+<!-- 		        <apex:pageBlockSectionItem rendered="{!selectedRunTest == 'RunSpecifiedTests'}"> -->
+<!-- 		        	<apex:outputPanel ></apex:outputPanel> -->
+<!-- 		        	<apex:inputTextarea value="{!specifiedTests}" id="specifiedTests" rows="5" cols="47" styleClass="disableitem"/> -->
+<!-- 		        </apex:pageBlockSectionItem> -->
+		    	<apex:pageBlockSectionItem >
+		    		<apex:outputLabel value="Frequency"/>
+		    		<apex:selectRadio value="{!selectedFrequency}" layout="pageDirection">
+		          			<apex:selectOptions value="{!frequencyOptions}"/>
+		          			<apex:actionSupport event="onchange" rerender="msg,block" onsubmit="show();" oncomplete="hide();"/>
+		          		</apex:selectRadio>
+		          	</apex:pageBlockSectionItem>
+				<apex:pageBlockSectionItem rendered="{!selectedFrequency == 'Weekly'}">
+		          		<apex:outputLabel value="Recurs every week on"/>
+		          		<apex:selectCheckboxes value="{!selecteddayOfWeek}" layout="pageDirection">
+				    	<apex:selectOptions value="{!dayOfWeekOptions}"/>
+					</apex:selectCheckboxes>
+		    	</apex:pageBlockSectionItem>
+		    	<apex:pageBlockSectionItem rendered="{!selectedFrequency == 'Monthly'}">
+					<apex:outputLabel value="On Day"/>
+					<apex:outputPanel >
+		           		<apex:selectList size="1" value="{!selectedMonthlyDate}" styleClass="disableitem">
+			                <apex:selectOptions value="{!monthlyDateOptions}"/>
+			            </apex:selectList>
+			            <apex:outputLabel value="of every month"/>
+		            </apex:outputPanel>
+		    	</apex:pageBlockSectionItem>
+		    	<apex:pageBlockSectionItem >
+		    		<apex:outputLabel value="Preferred Start Time"/>
+		    		<apex:outputPanel >
+			    		<apex:selectList size="1" value="{!selectedPreferedTime}" styleClass="disableitem">
+			                <apex:selectOptions value="{!preferedTimeOptions}"/>
+			            </apex:selectList>
+			            <apex:outputLabel value="And" styleClass="inlineLabels"/>
+			    		<apex:selectList size="1" value="{!selectedPreferedMinute}" styleClass="disableitem">
+			                <apex:selectOptions value="{!preferedTimeMinuteOptions}"/>
+			            </apex:selectList>
+			            <apex:outputLabel value="Minutes" styleClass="inlineLabels"/>
+		            </apex:outputPanel>
+		    	</apex:pageBlockSectionItem>
+		    </apex:pageBlockSection>
+	    </apex:pageBlock>
+    </apex:form>
+</apex:page>

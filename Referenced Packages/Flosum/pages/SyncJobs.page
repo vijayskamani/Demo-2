@@ -1,0 +1,243 @@
+<apex:page standardController="Flosum__Branch__c" extensions="Flosum.SyncJobsController" id="main">
+ 
+   <apex:sectionHeader title="Monitor Synchronization Jobs" description="Monitor the status of recent sync jobs"/>
+    <apex:pagemessages id="msg"/>
+    <style>
+    .customPopup {
+	    background-color: white;
+    	border-style: solid;
+	    border-width: 2px;
+    	left: 40%;
+	    padding: 10px;
+    	position: absolute;
+	    z-index: 9999;
+    	width: 40%;
+    	height: 50%;
+    	top: 30%;
+    	overflow:auto;  
+	}
+	
+	.closeButton {
+    	float: right;
+	}
+	
+    
+    </style>
+    
+    <script>
+    function LookupHoverDetail(a) {
+   		this.id = a;
+	    this.width = LookupHoverDetail.STANDARD_BUBBLE_WIDTH;
+   	    this.bubbleOffset = Sfdc.userAgent.isIE6 ? 5 : 14;
+   	    this.height = LookupHoverDetail.STANDARD_BUBBLE_HEIGHT;
+   	    this.hover = document.createElement("div");
+       	this.hover.id = a + "Hover";
+       	this.hover.className = "individualPalette lookupHoverDetail lookupHoverDetailLoading lookupHoverDetailOverridable";
+       	this.hover.innerHTML = '<div class="topLeft"><div class="bPageBlock"><div class="pbBody" style="white-space:pre-wrap; overflowy:scroll;" escape="false" ><div id="' + a + 'Block">' + 
+       							"Loading log..." + 
+       							'</div><div></div><div>';
+       	document.body.appendChild(this.hover);
+       	var c = this;
+       	addEvent(this.hover, "mouseover", function () {
+           	c.show()
+   	    }, true);
+       	addEvent(this.hover, "mouseout", function () {
+    	        c.hide()
+       	}, true);
+   	    this.hover = new iframeShim(this.hover);
+       	this.originalClass = "";
+        	this.fadingIn = this.fadingOut = null;
+       	this.loaded = false
+   	}
+	LookupHoverDetail.STANDARD_BUBBLE_WIDTH = 402;
+	LookupHoverDetail.STANDARD_BUBBLE_HEIGHT = 362;
+	LookupHoverDetail.SHOW_DELAY = 800;
+	LookupHoverDetail.HIDE_DELAY = 250;
+	LookupHoverDetail.stopLoading = false;
+	LookupHoverDetail.hovers = {};
+	LookupHoverDetail.getHover = function (a, b) {
+    	var c = window.Shepherd;
+    	if (LookupHoverDetail.hovers[a]) return LookupHoverDetail.hovers[a];
+    	c = new LookupHoverDetail(a);
+    	return LookupHoverDetail.hovers[a] = c
+	};
+	LookupHoverDetail.hideAllHovers = function () {
+    	var a = LookupHoverDetail.hovers, b;
+	    for (b in a) a.hasOwnProperty(b) && a[b].hide()
+	};
+	LookupHoverDetail.prototype.show = function () {
+    	if (this.fadingOut) {
+        	clearTimeout(this.fadingOut);
+	        this.fadingOut = null
+    	} else {
+        	var a = this;
+	        if (!this.fadingIn) this.fadingIn = setTimeout(function () {
+    	        a.showNow()
+        	}, LookupHoverDetail.SHOW_DELAY)
+    	}
+	};
+	LookupHoverDetail.prototype.showNow = function () {
+    	if (!this.loaded) {
+    		this.load();
+	    }
+    	this.position();
+	    this.hover.setStyle("visibility", "visible");
+    	this.hover.setStyle("display", "block");
+	    this.fadingIn = null
+	};
+	LookupHoverDetail.prototype.hide = function () {
+    	if (this.fadingIn) {
+        	clearTimeout(this.fadingIn);
+	        this.fadingIn = null
+    	} else {
+        	var a = this;
+	        this.fadingOut = setTimeout(function () {
+    	        a.hideNow()
+        	}, LookupHoverDetail.HIDE_DELAY)
+    	}
+	};
+	LookupHoverDetail.prototype.hideNow = function () {
+    	this.hover.setStyle("visibility", "hidden");
+	    this.fadingOut = null
+	};
+	LookupHoverDetail.prototype.load = function (a) {
+		var a = loadLog(this);
+		console.log(a);
+    	this.loaded = true
+	};
+	LookupHoverDetail.prototype.position = function () {
+    	var a = getElementByIdCS(this.id),
+        	b = getObjX(a),
+	        c = getObjY(a),
+    	    d = a.offsetWidth,
+        	e = a.offsetHeight,
+	        f = getScrollX(),
+    	    g = getScrollY(),
+        	h = getWindowWidth(),
+	        i = getWindowHeight();
+		    a = this.originalClass + " ";
+        	a += "top";
+	        c += e;
+    	if (b + d - this.bubbleOffset + this.width < f + h) {
+        	a += "Left";
+	        b = b + d / 2 - this.bubbleOffset
+    	} else {
+        	a += "Right";
+	        b = b + d / 2 - this.width
+    	}
+	    this.hover.setStyle("left", b + 20 + "px");
+    	this.hover.setStyle("top", c + "px");
+    	this.hover.setStyle("bottom", i + 20 + "px");
+	    this.hover.div.firstChild.className = a;
+	};
+
+	function loadLog(pointer){
+				Visualforce.remoting.Manager.invokeAction(
+	                '{!$RemoteAction.SyncJobsController.getLogContent}',
+	                pointer.id,
+	                function(r,e){
+	                	if(e.status && r) 
+            			{
+            				var div = document.getElementById(pointer.id+'Block');
+            				pointer.hover.innerHTML;
+            				if (div != undefined){
+            					div.innerHTML =  r ; 
+            					pointer.hover.div.classList.remove("lookupHoverDetailLoading");
+								pointer.position();
+            					
+            				}
+            			}
+            			else
+            			{
+            				console.log(e.message);
+            			}
+	                }   
+	            );
+	
+	}
+    
+    </script>
+     
+   
+    <br/>
+ 	<apex:form id="form1">
+	<apex:pageblock title="Statistics" id="tb0">
+         <apex:outputText value="Your organization has processed {!jobProcessed} sync jobs in the last 24 hours" />
+ 	</apex:pageblock> 
+	<apex:pageblock title="In Progress"  mode="edit" id="tb1">
+ 		<apex:pageblockSection columns="1">
+                <apex:pageBlocktable value="{!pJobList}" var="item" rendered="{!if(pJobList.size>0,true,false)}">
+                	<apex:column headerValue="Action">
+	 					<apex:commandLink action="{!cancelJob}" value="Abort" style="color:blue;" rerender="tb0,tb1,tb2">
+                    		<apex:param name="sParam" value="{!item.Id}" assignTo="{!cancelJobId}"/>
+    	               	</apex:commandLink>
+                   	</apex:column>
+                    <apex:column headerValue="Job ID" value="{!item.Id}"/>
+                    <apex:column headerValue="Branch" value="{!item.Flosum__Branch_Name__c}">
+                    </apex:column>
+                    <apex:column headerValue="Commit" value="{!item.Flosum__Commit__c}"/>
+                    <apex:column headerValue="Operation" value="{!item.Flosum__Type__c}"/>
+                    <apex:column headerValue="Linked to" value="{!item.CredentialsId__r.Name}"/>
+                </apex:pageBlocktable>
+               <apex:outputText value="No records to display." rendered="{!if(pJobList.size == 0,true,false)}"/>
+        </apex:pageblockSection>
+     </apex:pageblock>
+	<apex:pageblock title="Queued (last 20)"  mode="edit" id="tb2">
+ 		<apex:pageblockSection columns="1" id="table2">
+                <apex:pageBlocktable value="{!qJobList}" var="item" rendered="{!if(qJobList.size>0,true,false)}">
+                	<apex:column headerValue="Action">
+            	    	<apex:commandLink action="{!cancelJob}" value="Abort" style="color:blue;" rerender="tb0,tb2,table2" immediate="true">
+                    		<apex:param name="sParam" value="{!item.Id}" assignTo="{!cancelJobId}"/>
+                	   	</apex:commandLink>
+                   	</apex:column>
+                    <apex:column headerValue="Job ID" value="{!item.Id}"/>
+                    <apex:column headerValue="Branch">
+                     	<apex:outputLink value="/{!item.Flosum__BranchId__c}"> {!item.Flosum__Branch_Name__c} </apex:outputLink>
+                    </apex:column>
+                    <apex:column headerValue="Queued Time" value="{!item.createdDate}"/>
+                    <apex:column headerValue="Operation" value="{!item.Flosum__Type__c}"/>
+                    <apex:column headerValue="Linked to"> 
+                    	<apex:outputLink value="/{!item.CredentialsId__r}">{!item.CredentialsId__r.Name}</apex:outputLink>
+                    </apex:column>
+                </apex:pageBlocktable>
+               <apex:outputText value="No records to display." rendered="{!if(qJobList.size == 0,true,false)}"/>
+        </apex:pageblockSection>
+     </apex:pageblock>
+	<apex:pageblock title="Completed (last 20)"  mode="edit" id="tb3">
+ 		<apex:pageblockSection columns="1" id="table3">
+                <apex:pageBlocktable value="{!cJobList}" var="item" rendered="{!if(cJobList.size>0,true,false)}">
+                	<apex:column headerValue="Action">
+            	    	<apex:commandLink action="{!delRecord}" value="Del" style="color:blue;" rerender="tb0,tb3,table3" immediate="true">
+                    		<apex:param name="sParam" value="{!item.Id}" assignTo="{!selectedRecId}"/>
+                	   	</apex:commandLink>
+                   	</apex:column>
+                    <apex:column headerValue="Job ID">
+                    	<a href="/{!item.Id}" id="{!item.Id}" onblur="LookupHoverDetail.getHover('{!item.Id}').hide();" onfocus="LookupHoverDetail.getHover('{!item.Id}').show();" 
+                                        onmouseout="LookupHoverDetail.getHover('{!item.Id}').hide();" onmouseover="LookupHoverDetail.getHover('{!item.Id}').show();">
+               				 {!item.Id}
+           				</a>
+                    </apex:column>
+                    <apex:column headerValue="Commit" value="{!item.Flosum__Commit__c}"/>
+                    <apex:column headerValue="Branch" value="{!item.Flosum__Branch_Name__c}">
+                    </apex:column>
+                    <apex:column headerValue="Repository" value="{!item.CredentialsId__r.RepositoryId__r.Name}">
+                    </apex:column>
+                    <apex:column headerValue="Linked to"> 
+                    	<apex:outputLink value="/{!item.CredentialsId__r}">{!item.CredentialsId__r.Name}</apex:outputLink>
+                    </apex:column>
+                    <apex:column headerValue="Success" value="{!item.Flosum__isSuccess__c}"/>
+                    <apex:column headerValue="End Time" value="{!item.lastModifiedDate}"/>
+                    <apex:column headerValue="State" value="{!item.Flosum__State__c}"/>
+                    <apex:column headerValue="Operation" value="{!item.Flosum__Type__c}"/>
+                </apex:pageBlocktable>
+               <apex:outputText value="No records to display." rendered="{!if(cJobList.size == 0,true,false)}"/>
+        </apex:pageblockSection>
+     </apex:pageblock>
+
+      
+    <apex:actionfunction action="{!openPopup}" oncomplete="showPopup('{!JSENCODE(log)}');" name="openView" immediate="true" reRender="popup">
+    	<apex:param assignTo="{!logId}" value="" name="logId"/>
+    </apex:actionfunction>
+     
+     </apex:form>
+</apex:page>

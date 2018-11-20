@@ -1,0 +1,429 @@
+<apex:page standardController="Flosum__Patch__c" extensions="Flosum.ReplaceSuffixController" sidebar="false">
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/ga.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__zipp,'res/js/zip.js')}"/>
+	<c:TrackPanel />
+	<c:Wait />
+	<style>
+		div .pagination {
+			text-align: center;
+		}
+		td .dataCell label {
+		font-weight: normal;
+		}
+		span.paginationEle {
+		margin-left: 4px;
+		}
+		.pagination input {
+		margin-left: 4px;
+		} 
+		body .searchRow {
+		  margin-left: 1%;
+		}
+		body .searchRowLast {
+		  margin-left: .5%;
+		}
+	</style>
+	<apex:form >
+		<apex:pagemessages id="CTPmg"/>
+		<apex:actionfunction action="{!redirectToPatch}" reRender="CTPmg" name="redirectToPatch" onComplete="hide();" />
+		<apex:actionfunction action="{!showMessage}" reRender="CTPmg" name="showMessage" onComplete="hide();">
+			<apex:param assignTo="{!errorMessage}" value="" name="newstr"/>
+		</apex:actionfunction>
+		<apex:actionfunction action="{!updateAttachment}" reRender="CTPmg" name="updateAttachment" onComplete="updateAttachmentOneByOne();">
+			<apex:param assignTo="{!largeStr}" value="" name="newstrjs"/>
+		</apex:actionfunction>
+		<apex:pageBlock title="Replace Suffix" id="pBlock">
+			<apex:pageBlockButtons >
+				<apex:commandButton value="Refresh List" action="{!refereshList}" rendered="{!if(compTypeOptions.size>0,true,false)}" oncomplete="hide();" rerender="pBlock,msg" onclick="show();"/>
+		        <apex:commandButton value="Replace" action="{!replaceText}" rendered="{!if(compTypeOptions.size>0,true,false)}" oncomplete="replaceContent('{!JSENCODE(selectedJSON)}');" rerender="msg" onclick="show();"/>
+			</apex:pageBlockButtons>
+			<apex:pageBlockSection columns="1" id="pbSectionBlock">
+				<apex:pageBlockSectionItem >
+	            	<apex:outputLabel value="Patch" />
+					<apex:outputField value="{!Flosum__Patch__c.Name}" />
+	            </apex:pageBlockSectionItem>
+	            <apex:pageblockSectionItem >
+					<apex:outputLabel value="Search For Suffix" />
+					<apex:inputText value="{!searchSuffix}" id="srchText"/>
+				</apex:pageblockSectionItem>
+				<apex:pageblockSectionItem >
+					<apex:outputLabel value="Replace With" />
+					<apex:inputText value="{!replaceWith}" id="rplcText"/>
+				</apex:pageblockSectionItem>
+	            <apex:pageBlockSectionItem rendered="{!IF(compTypeOptions.size > 0,true,false)}">
+	            	<apex:outputPanel >
+		            	<apex:outputLabel value="{!$Label.flosum__component_type} :" />
+		            	<apex:selectList label="{!$Label.flosum__component_type} :" size="1" value="{!selectedType}" >
+			                <apex:selectOptions value="{!compTypeOptions}" />
+			                <apex:actionSupport event="onchange"  reRender="pBlock,msg" action="{!defaultPagination}" oncomplete="hide();" onsubmit="show();"/> 
+			            </apex:selectList>
+			            <apex:inputText value="{!searchText}" styleClass="searchRow" onkeypress="enterPress(event);"/>   
+			            <apex:commandButton action="{!searchComponent}" value="Search" onClick="show();" onComplete="hide();" reRender="pBlock,msg" styleClass="searchRow" />
+			            <apex:commandButton action="{!hideSearch}" value="Hide Search" onClick="show();" onComplete="hide();" reRender="pBlock,msg" rendered="{!if(IsSearch,true,false)}" styleClass="searchRowLast" />
+		            </apex:outputPanel>
+	            </apex:pageBlockSectionItem>
+	    	</apex:pageBlockSection>
+	    	<apex:pageBlockSection id="tb" columns="1">
+	    		<script>
+					$( document ).ready(function() {
+					    checkUnCheck();
+					});
+				</script>
+		    	<apex:pageBlockTable value="{!componentList}" var="mi" rendered="{!if(componentList.size>0,true,false)}">
+		    		<apex:column headervalue="Select">
+						<apex:facet name="header"><input type="checkbox" onclick="checkItemAll(this);" class="psli" >&nbsp;</input></apex:facet>
+						<apex:inputCheckbox value="{!mi.checkStatus}" styleclass="sli" onClick="checkUnCheck();"/>
+					</apex:column>
+					<apex:column >
+						<apex:facet name="header">
+							<apex:commandLink value="{!If(OrderByFieldName == 'Component_Name__c',If(Order == 'ASC',$Label.flosum__component_name+' ▲',$Label.flosum__component_name+' ▼') ,$Label.flosum__component_name)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+								<apex:param assignTo="{!TempOrderByFieldName}" value="Component_Name__c" name="OrderByFieldName"/>
+							</apex:commandLink>
+						</apex:facet>
+						<apex:outputLabel value="{!mi.comp.Flosum__Component_Name__c}" />
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'Component_Type__c',If(Order == 'ASC',$Label.flosum__component_type+' ▲',$Label.flosum__component_type+' ▼') ,$Label.flosum__component_type)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="Component_Type__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.comp.Flosum__Component_Type__c}" />
+						</apex:column>
+						<apex:column >
+							<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'Version__c',If(Order == 'ASC',$Label.flosum__version+' ▲',$Label.flosum__version+' ▼') ,$Label.flosum__version)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="Version__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.comp.Flosum__Version__c}" />
+			            </apex:column>
+			            <apex:column >
+			        		<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'Developer__c',If(Order == 'ASC',$Label.flosum__developer+' ▲',$Label.flosum__developer+' ▼') ,$Label.flosum__developer)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="Developer__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.comp.Flosum__Developer__c}" />
+						</apex:column>
+						<apex:column >
+			        		<apex:facet name="header">
+								<apex:commandLink value="{!If(OrderByFieldName == 'Last_Updated_On__c',If(Order == 'ASC',$Label.flosum__changed_on+' ▲',$Label.flosum__changed_on+' ▼') ,$Label.flosum__changed_on)}" action="{!orderByComponents}" onClick="show();" onComplete="hide();" reRender="tb,msg">
+									<apex:param assignTo="{!TempOrderByFieldName}" value="Last_Updated_On__c" name="OrderByFieldName"/>
+								</apex:commandLink>
+							</apex:facet>
+							<apex:outputLabel value="{!mi.comp.Flosum__Last_Updated_On__c}" />
+						</apex:column>
+		    	</apex:pageBlockTable>
+		    	<apex:outputPanel rendered="{!if(componentList.size > 0,true,false)}" layout="block" styleClass="pagination">
+						<apex:commandbutton value="First" action="{!FirstPage}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+						<apex:commandbutton value="Previous" action="{!previous}" reRender="tb,msg" disabled="{!prev}" onClick="show();" onComplete="hide();"/>
+						<apex:outputText value="{!paginationStr}" styleClass="paginationEle"/>
+						<apex:commandbutton value="Next" action="{!next}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+						<apex:commandbutton value="Last" action="{!LastPage}" reRender="tb,msg" disabled="{!nxt}" onClick="show();" onComplete="hide();"/>
+				</apex:outputPanel>
+	    	</apex:pageBlockSection>
+		</apex:pageBlock>
+		<apex:actionFunction name="callSearch" action="{!searchComponent}" oncomplete="hide();" rerender="pBlock,msg" />
+	</apex:form>
+	<script>
+		var patchId = '{!JSENCODE(Patch__c.Id)}';
+		zip.workerScriptsPath = "{!URLFOR($Resource.zipp,'res/js/workers')}/";
+		
+		var attList = [];
+		var readAttachmentIndex = 0;
+		var replaceBase64LimitLi = [];
+		var replaceBase64Li = [];
+		var bodySize = 0;
+		var updateAttachmentIndex = 0;
+		
+		function replaceContent(componentLiStr)
+		{
+			console.log('patchId--'+patchId);
+			console.log(componentLiStr);
+			attList = [];
+			readAttachmentIndex = 0;
+			replaceBase64LimitLi = [];
+			replaceBase64Li = [];
+			bodySize = 0;
+			updateAttachmentIndex = 0;
+		
+			if(componentLiStr != undefined && componentLiStr != '' && componentLiStr != '[]')
+			{
+				attList = JSON.parse(componentLiStr);
+				getAttachments();
+			}
+			hide();
+		}
+		
+		function getAttachments()
+		{
+			if(readAttachmentIndex < attList.length)
+			{
+				var attSet = attList[readAttachmentIndex];
+				console.log('Read Content: '+(readAttachmentIndex+1)+'/'+attList.length);
+				Visualforce.remoting.Manager.invokeAction(
+			        '{!$RemoteAction.ReplaceSuffixController.getAttachments}',
+			        JSON.stringify(attSet),
+			        handleAttachments
+			    );
+			}
+			else
+			{
+				if(replaceBase64Li.length > 0)
+				{
+					replaceBase64LimitLi.push(replaceBase64Li);
+				}
+				console.log(replaceBase64LimitLi);
+				//all attachment collected succesfully.
+				console.log('All Content Retrieved.');
+				updateAttachmentIndex = 0;
+				updateAttachmentOneByOne();
+			}
+		}
+		
+		function updateAttachmentOneByOne() {
+			if(updateAttachmentIndex < replaceBase64LimitLi.length)
+			{
+				updateAttachment(JSON.stringify(replaceBase64LimitLi[updateAttachmentIndex]));
+				updateAttachmentIndex++;
+			}
+			else
+			{
+				//Rediret to target page
+				console.log('Rediret to target page.');
+				redirectToPatch();
+			}
+		}
+		
+		function handleAttachments(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	var attReadIndex = 0;
+	    		var readFullAtt = function(){
+	    			if(attReadIndex < r.length)
+	    			{
+	    				var att = r[attReadIndex];
+	    				var attId = att.attId;
+						var parentId = att.parentId;
+			    		var metaType = att.compType;
+			    		var base64str = att.base64;
+			    		
+			    		console.log(metaType);
+			    		console.log(base64str);
+			    		console.log('Collect Content: '+(attReadIndex+1)+'/'+r.length+' '+metaType);
+			    		
+		                var IsSerchTextFoundInAnyFile = false;
+		                var fileUpdatedWrapLi = [];
+			    		// use a Data64URIReader to read the zip from a base64 string
+						zip.createReader(new zip.Data64URIReader(base64str), function(reader) {
+							var EntryIndex = 0;
+							console.log(EntryIndex);
+							// get all entries from the zip
+							reader.getEntries(function(entries) {
+								if(entries.length)
+								{
+									var readSingleFile = function() {
+										console.log(entries.length);
+									    if(EntryIndex < entries.length) 
+									    {
+									    	var singleEntry = entries[EntryIndex];
+									    	var fileName = singleEntry.filename;
+									    	entries[EntryIndex].getData(new zip.TextWriter(), function(fileText) {
+												if(fileName != undefined)
+										        {
+										        	var serchString = $("[id$='srchText']").val();
+										        	var replaceString = $("[id$='rplcText']").val();
+										        	if(fileText.indexOf(serchString) > -1)
+										        	{
+										        		IsSerchTextFoundInAnyFile = true;
+										        		fileText = fileText.replace(new RegExp(serchString, 'gi'), replaceString);
+										        	}
+										        	var wrap = {};
+										        	wrap.fileName = fileName;
+										        	wrap.fileText = fileText;
+										        	fileUpdatedWrapLi.push(wrap);
+												}
+												EntryIndex++;
+												readSingleFile();
+											});
+								    	}
+								    	else
+								    	{
+								    		console.log('IsSerchTextFoundInAnyFile-'+IsSerchTextFoundInAnyFile);
+								    		if(IsSerchTextFoundInAnyFile && fileUpdatedWrapLi.length > 0)
+								    		{
+								        		var addIndex = 0;
+												var tempWriter;
+												function nextFile() 
+												{
+													if(addIndex < fileUpdatedWrapLi.length)
+													{
+														var singleEntry = entries[addIndex];
+														var fileName = singleEntry.filename;
+														var wrap = 	fileUpdatedWrapLi[addIndex];
+											
+														tempWriter.add(wrap.fileName, new zip.TextReader(wrap.fileText), function() {
+															addIndex++;
+															nextFile();
+														});
+													}
+													else
+													{
+														tempWriter.close(function(base64Data) {
+															base64Data = base64Data.slice(base64Data.indexOf(';base64,') + 8);
+															var replaceInfo = {};
+						        							replaceInfo.attId = attId;
+															replaceInfo.base64Str = base64Data;
+															if(((bodySize+base64Data.length) > 2000000 || replaceBase64Li.length > 200) && replaceBase64Li.length > 0)
+															{
+																replaceBase64LimitLi.push(replaceBase64Li);
+																replaceBase64Li = [];
+																bodySize = 0;
+															}
+															replaceBase64Li.push(replaceInfo);
+															bodySize = bodySize + base64Data.length;
+															
+															attReadIndex++;
+															readFullAtt();
+									    				});
+													}
+												}
+									
+												function createZipWriter() {
+									                  zip.createWriter(new zip.Data64URIWriter(), function(writer2) {
+														tempWriter = writer2;
+														nextFile();
+														
+													}, function(error) {
+														// onerror callback
+														console.log('Error while creating single zip.');
+														console.log(error);
+														console.log(JSON.stringify(error));
+														if(error.message != undefined)
+														{
+															showMessage(error.message);
+														}
+														else
+														{
+															showMessage('Unknown error.');
+														}
+													});
+												}
+												createZipWriter();
+								    		}
+								    		else
+								    		{
+								    			attReadIndex++;
+												readFullAtt();
+								    		}
+								    	}
+							    	}
+							    	readSingleFile();
+								}
+								else
+								{
+									console.log('!entries.length-'+metaType);
+									attReadIndex++;
+									readFullAtt();
+								}
+							});
+						}, function(error) {
+							  // onerror callback
+							  console.log('Error in reading file from attachments.');
+							  console.log(error);
+							  console.log(JSON.stringify(error));
+								if(error.message != undefined)
+								{
+									showMessage(error.message);
+								}
+								else
+								{
+									showMessage('Unknown error.');
+								}
+						});
+	    			}
+	    			else
+	    			{
+						//attachment found.
+						readAttachmentIndex++;
+						getAttachments();
+	    			}
+	    		}
+	    		readFullAtt();
+		    }
+		    else
+		    {
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function enterPress(e){
+	        if(e.keyCode==13){
+	        	show();
+	            if(e.preventDefault){ 
+	                e.preventDefault();
+	            }
+	            else{
+	                e.returnValue=false;
+	            }
+	            callSearch();
+	        }        
+	    }		
+		function checkItemAll(ele) {
+			var checkboxes = document.getElementsByClassName('sli');
+		     if (ele.checked) {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = true;
+		             }
+		         }
+		     } else {
+		         for (var i = 0; i < checkboxes.length; i++) {
+		             if (checkboxes[i].type == 'checkbox') {
+		                 checkboxes[i].checked = false;
+		             }
+		         }
+		     }
+		}
+		
+		function checkUnCheck()
+		{	
+			var checkboxes = document.getElementsByClassName('sli');
+			if(checkboxes != undefined && checkboxes.length > 0)
+			{
+				var allUnChecked = true;
+				var allChecked = true;
+				for(var i = 0; i < checkboxes.length; i++) 
+		        {
+					if(checkboxes[i].type == 'checkbox' && checkboxes[i].checked) 
+		            {
+			        	allUnChecked = false;
+			        }
+		            else if(checkboxes[i].type == 'checkbox' && !checkboxes[i].checked)
+		            {
+		            	allChecked = false;
+		            }
+		        }
+		        if(allChecked)
+		        {
+		        	var parentCheckboxes = document.getElementsByClassName('psli');
+		        	if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+		        	{
+		        		parentCheckboxes[0].checked = true;
+		        	}
+		        }
+		        else if(allUnChecked || (!allUnChecked && !allChecked))
+		        {
+		        	var parentCheckboxes = document.getElementsByClassName('psli');
+		        	if(parentCheckboxes != undefined && parentCheckboxes.length > 0)
+		        	{
+		        		parentCheckboxes[0].checked = false;
+		        	}
+		        }
+		    }
+		}
+	</script>
+</apex:page>

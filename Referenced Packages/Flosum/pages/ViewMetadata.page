@@ -1,0 +1,122 @@
+<apex:page controller="Flosum.ViewMetadataController" sidebar="false" showHeader="false" doctype="html-5.0" title="{!history.Component__r.Flosum__Component_Name__c}" standardStylesheets="false">
+    <c:TrackPanel />
+    <style>
+        table.diff .delete {
+      background-color: #FFFFFF;
+    }
+    table.diff .insert {
+        display: none;
+    }
+    table.diff tbody th {
+        display: none;
+      }
+      table.diff thead th {
+      display: none;
+    }
+    table.diff tbody tr {
+      border: solid 1px #F7F4D3;
+      width: 500px;
+    }
+    </style>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+    <apex:stylesheet value="{!$Resource.Flosum__DiffCSS}"/>
+    <script src="{!$Resource.DiffJS}"></script>
+    <c:Wait />
+    <apex:pagemessages id="msg"/>
+    <apex:form id="form" rendered="{!if(history != null,true,false)}">
+        <apex:actionfunction name="startCompare" onComplete="diffUsingJS(1,'',''); hide();" rerender="none"/ >
+        <apex:pageBlock title="{!history.Component__r.Flosum__Component_Name__c}">
+            <apex:pageBlockSection columns="1">
+                <textarea  id="baseText" style="display:none" cols="50">
+                </textarea>
+                <input type="text" id="contextSize" value="10000" style="display:none"/>
+                <textarea id="newText" style="display:none" cols="50" >
+                </textarea>
+                <apex:pageBlockSectionItem >
+                    <apex:outputpanel id="compareBlock">
+                        <div id="diffoutput">
+                        </div> 
+                    </apex:outputpanel>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageBlock>
+    </apex:form>
+    <script>
+    	var mmap = {};
+	    mmap['CustomField'] = true;
+	    mmap['CustomLabel'] = true;
+	    mmap['CompactLayout'] = true;
+	    mmap['WebLink'] = true;
+	    mmap['RecordType'] = true;
+	    mmap['ListView'] = true;
+	    mmap['FieldSet'] = true;
+	    mmap['AssignmentRule'] = true;
+	    mmap['AutoResponseRule'] = true;
+	    mmap['ValidationRule'] = true;
+	    mmap['WorkflowTask'] = true;
+		mmap['WorkflowOutboundMessage'] = true;
+		mmap['WorkflowFieldUpdate'] = true;
+		mmap['WorkflowKnowledgePublish'] = true;
+		mmap['WorkflowAlert'] = true;
+		mmap['WorkflowRule'] = true;
+		mmap['SharingOwnerRule'] = true;
+		mmap['SharingCriteriaRule'] = true;
+		mmap['BusinessProcess'] = true;
+		mmap['SharingReason'] = true;
+		mmap['EscalationRule'] = true;
+		mmap['MatchingRule'] = true;
+		mmap['ManagedTopic'] = true;
+		mmap['Profile'] = true;
+		mmap['PermissionSet'] = true;
+		
+        var attachmentId = ""+'{!attachmentId}';
+        var fileName = ""+'{!fileName}';
+        var compType = ""+'{!compType}';
+        if(attachmentId.length == 18)
+        {
+            show();     
+            Visualforce.remoting.Manager.invokeAction(
+				        '{!$RemoteAction.ViewMetadataController.getBase64}',
+				        attachmentId,
+				        handeleGetData
+				    );
+        }
+        
+        function handeleGetData(r,e)
+		{
+		    if(e.status && r) 
+		    {
+		    	if(r != '')
+		    	{
+		    		var zip = new JSZip(r,{base64:true});
+	                if(zip.files[fileName] != undefined)
+	                {
+	                	var text = zip.files[fileName].asText();
+	                	
+	                	if(mmap[compType] == true || isXml(text))
+	                	{
+	                		document.getElementById('baseText').value = formatXml(text);
+	                	}
+	                	else
+	                    	document.getElementById('baseText').value = text;
+	                }
+	                else
+	                {
+	                    document.getElementById('baseText').value = "";
+	                }
+	                startCompare();
+		    	}
+		    }
+		    else
+		    {
+		    	console.log(e.message);
+		    	//showMessage(e.message);
+		    }
+        }
+        
+        function isXml(str) {
+        	if (str == undefined) return false;
+			return str.indexOf('<?xml') > -1;
+		}
+    </script>
+</apex:page>

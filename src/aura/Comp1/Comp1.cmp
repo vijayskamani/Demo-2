@@ -1,0 +1,5 @@
+<aura:component >
+    <p>Hello This is 1st Component.</p>
+     <aura:attribute name="expense" type="Account"/>
+
+</aura:component>

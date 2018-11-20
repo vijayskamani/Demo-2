@@ -1,0 +1,433 @@
+<apex:page controller="Flosum.PostInstallScriptController" sidebar="false">
+	<c:TrackPanel />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jsforce)}"/>
+	<c:Wait />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__FlosumPostInstallScript)}"/> 
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+	<apex:sectionHeader title="{!$Label.flosum__post_install_page_title}" description="{!$Label.flosum__post_install_page_description}"/>
+	<apex:form id="postinstallForm">
+		<apex:pageMessages id="msg"/>
+		<apex:actionFunction name="profileSecondStep" action="{!profileValidate}" reRender="msg" onComplete="createProfilePermissionZip('{!profileNamesStr}','{!profileXml}');"/>
+		<apex:actionFunction name="deployLayout" action="{!deployPostScript}" reRender="postinstallForm" onComplete="checkDeploymentStatus('{!AsyncResultId}',{!isProfileFirstStep});">
+			<apex:param assignTo="{!zipStr}" name="zipStr" value="" />
+			<apex:param assignTo="{!isPartOfPackage}" name="isPartOfPackage" value="" />
+		</apex:actionFunction>  
+		<apex:actionFunction name="checkStatus" action="{!checkAsyncRequest}" rerender="postinstallForm" onComplete="checkDeploymentStatus('{!AsyncResultId}',{!isProfileFirstStep});"/>
+		<apex:pageBlock title="{!$Label.flosum__post_install_profile_title}">
+			<p>{!$Label.flosum__post_install_profile_description}</p>
+			<apex:pageBlockSection columns="1" collapsible="false">
+           	    <apex:pageBlockSectionItem >
+	           		<apex:outputpanel id="picklist" layout="block">
+		            	<c:MultiSelectComponent leftLabel="Available Profiles"
+			                leftOption="{!leftOptionList}"
+			                rightLabel="Selected Profiles"
+			                rightOption="{!rightOptionList}"
+			                size="10"
+			                width="300px"/>
+	            	</apex:Outputpanel>
+            	</apex:pageBlockSectionItem>
+           	</apex:pageBlockSection>
+           	<apex:pageBlockButtons location="bottom">
+				<apex:commandButton action="{!profileApplicationValidate}" onClick="show();" value="Update" reRender="msg" onComplete="createProfilePermissionZip('{!profileNamesStr}','{!profileXml}');"/>
+			</apex:pageBlockButtons>
+        </apex:pageBlock>
+        <apex:pageBlock title="{!$Label.flosum__post_install_applicatoin_title}">
+        	<p>{!$Label.flosum__post_install_applicatoin_description}</p>  
+        	<p>{!$Label.flosum__post_install_applicatoin_description_2}</p> 	
+			<apex:pageBlockButtons location="bottom">
+				<apex:commandButton action="{!applicationUpdate}" value="Update" reRender="msg" onClick="show();" onComplete="createApplicationZip();"/>
+			</apex:pageBlockButtons>
+		</apex:pageBlock>
+        <apex:pageBlock title="{!$Label.flosum__post_install_layout_title}">
+        	<p>{!$Label.flosum__post_install_layout_description}</p>
+        	<apex:outputPanel >
+				<apex:outputLabel value="Update list view and search layouts:" for="updateSearchLayoutsAndListView"/>
+				<apex:inputCheckbox selected="true" id="updateSearchLayoutsAndListView" style="margin-left: 10px;"/>
+        	</apex:outputPanel>
+			<apex:pageBlockButtons location="bottom">
+				<apex:commandButton action="{!layoutUpdate}" value="Update" reRender="msg" onClick="show();" onComplete="createLayoutsZip();"/>
+			</apex:pageBlockButtons>
+		</apex:pageBlock>
+	</apex:form>
+	<script>
+		
+		var url = '{!baseUrl}';
+		var packageXmlName = 'package.xml';
+		var NameSpacePrefix = '{!NameSpacePrefix}';
+		var flosumsf = jsforce;
+		var flosumTabandListViewMap = {};
+		
+		//enable block UI
+		show();
+		
+		$( document ).ready(function() {
+			if('{!PlaceOfException}' == 'ERROR')
+			    listRemoteSiteSetting('{!baseUrl}','{!PlaceOfException}');
+			else
+				hide();
+		});
+		
+		function createLayoutsZip()
+		{
+			var flosumPackageXmlName= NameSpacePrefix != '' ? NameSpacePrefix+'/package.xml' : 'package.xml';
+			var flosumPackageXml = '';
+			flosumPackageXml+='<?xml version="1.0" encoding="UTF-8"?>';
+			flosumPackageXml+='<Package xmlns="http://soap.sforce.com/2006/04/metadata">';
+			
+			
+			var myZip = new JSZip();
+			if(NameSpacePrefix != '')
+			{
+				flosumPackageXml+='<fullName>'+NameSpacePrefix+'</fullName>';
+				flosumPackageXml+='<apiAccessLevel>Unrestricted</apiAccessLevel>';
+				flosumPackageXml+='<namespacePrefix>'+NameSpacePrefix+'</namespacePrefix>';
+			}
+			flosumPackageXml+='<types>';
+			for(var key in layoutFileMap)
+			{
+				if(flosumLayoutMap[key] != undefined)
+				{
+					flosumPackageXml+='<members>'+layoutFileMap[key]+'</members>';
+					var fileName = NameSpacePrefix != '' ? NameSpacePrefix+'/'+key : key;
+					myZip.file(fileName,flosumLayoutMap[key]);
+				}
+			}
+			flosumPackageXml+='<name>Layout</name>';
+			flosumPackageXml+='</types>';
+			
+			var temp = NameSpacePrefix != '' ? NameSpacePrefix+'__' : NameSpacePrefix;
+			//Patch object xml
+			var patchXml = '<?xml version="1.0" encoding="UTF-8"?>'+
+						'<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">'+
+							'<deploymentStatus>Deployed</deploymentStatus>'+
+							'<label>Patch</label>'+
+							'<listViews>'+
+						        '<fullName>All</fullName>'+
+						        '<columns>NAME</columns>'+
+						        '<columns>Total_Items__c</columns>'+
+						        '<columns>UPDATEDBY_USER</columns>'+
+						        '<columns>LAST_UPDATE</columns>'+
+						        '<filterScope>Everything</filterScope>'+
+						        '<label>All</label>'+
+						    '</listViews>'+
+							'<nameField>'+
+					        	'<label>Patch Name</label>'+
+					        	'<type>Text</type>'+
+					    	'</nameField>'+
+					    	'<pluralLabel>Patches</pluralLabel>'+
+					    	'<searchLayouts>'+
+						        '<customTabListAdditionalFields>Total_Items__c</customTabListAdditionalFields>'+
+						        '<customTabListAdditionalFields>UPDATEDBY_USER</customTabListAdditionalFields>'+
+						        '<customTabListAdditionalFields>LAST_UPDATE</customTabListAdditionalFields>'+
+						        '<listViewButtons>Merge_Patches</listViewButtons>'+
+						        '<searchResultsAdditionalFields>Total_Items_in_Patch__c</searchResultsAdditionalFields>'+
+						        '<searchResultsAdditionalFields>UPDATEDBY_USER</searchResultsAdditionalFields>'+
+						        '<searchResultsAdditionalFields>Owner_Name__c</searchResultsAdditionalFields>'+
+						    '</searchLayouts>'+
+						    '<sharingModel>ReadWrite</sharingModel>'+
+				    	'</CustomObject>';
+			//commit object xml	    	
+			var commitXml = '<?xml version="1.0" encoding="UTF-8"?>'+
+							'<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">'+
+								'<deploymentStatus>Deployed</deploymentStatus>'+
+								'<label>Commit</label>'+
+							    '<listViews>'+
+							        '<fullName>All'+'</fullName>'+
+							        '<columns>NAME</columns>'+
+							        '<columns>Commit_Name__c</columns>'+
+							        '<columns>Description__c</columns>'+
+							        '<columns>Branch__c</columns>'+
+							        '<columns>CREATED_DATE</columns>'+
+							        '<filterScope>Everything</filterScope>'+
+							        '<label>All</label>'+
+							    '</listViews>'+
+							    '<nameField>'+
+							        '<displayFormat>Commit-{YY}-{MM}-{DD}-{00000}</displayFormat>'+
+							        '<label>Commit Number</label>'+
+							        '<type>AutoNumber</type>'+
+							    '</nameField>'+
+							    '<pluralLabel>Commits</pluralLabel>'+
+							    '<searchLayouts>'+
+							        '<customTabListAdditionalFields>Commit_Name__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>Description__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>Branch__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>CREATED_DATE</customTabListAdditionalFields>'+
+							        '<excludedStandardButtons>New</excludedStandardButtons>'+
+							    '</searchLayouts>'+
+							    '<sharingModel>ReadWrite</sharingModel>'+
+							 '</CustomObject>';
+			var buildXml = '<?xml version="1.0" encoding="UTF-8"?>'+
+							'<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">'+
+								'<deploymentStatus>Deployed</deploymentStatus>'+
+								'<label>Build</label>'+
+							    '<listViews>'+
+							        '<fullName>All</fullName>'+
+							        '<columns>NAME</columns>'+
+							        '<columns>Number_of_Components__c'+'</columns>'+
+							        '<columns>Start_Time__c</columns>'+
+							        '<columns>UPDATEDBY_USER</columns>'+
+							        '<filterScope>Everything</filterScope>'+
+							        '<label>All</label>'+
+							    '</listViews>'+
+							    '<nameField>'+
+							        '<displayFormat>Build-{YY}-{MM}-{DD}-{00000}</displayFormat>'+
+							        '<label>Build Name</label>'+
+							        '<type>AutoNumber</type>'+
+							    '</nameField>'+
+							    '<pluralLabel>Builds</pluralLabel>'+
+							    '<searchLayouts>'+
+							        '<customTabListAdditionalFields>Number_of_Components__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>Start_Time__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>UPDATEDBY_USER</customTabListAdditionalFields>'+
+							        '<excludedStandardButtons>New</excludedStandardButtons>'+
+							        '<excludedStandardButtons>ChangeOwner</excludedStandardButtons>'+
+							        '<excludedStandardButtons>Accept</excludedStandardButtons>'+
+							    '</searchLayouts>'+
+							    '<sharingModel>ReadWrite</sharingModel>'+
+							 '</CustomObject>';
+			var branchXml = '<?xml version="1.0" encoding="UTF-8"?>'+
+							'<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">'+
+								'<deploymentStatus>Deployed</deploymentStatus>'+
+								'<label>Branch</label>'+
+							    '<listViews>'+
+							        '<fullName>All</fullName>'+
+							        '<columns>NAME</columns>'+
+							        '<columns>Branch_Name__c</columns>'+
+							        '<columns>Branch_Description__c</columns>'+
+							        '<columns>LAST_UPDATE</columns>'+
+							        '<filterScope>Everything</filterScope>'+
+							        '<label>All</label>'+
+							    '</listViews>'+
+							    '<nameField>'+
+							        '<displayFormat>B-{0000}</displayFormat>'+
+							        '<label>Branch Number</label>'+
+							        '<type>AutoNumber</type>'+
+							    '</nameField>'+
+							    '<pluralLabel>Branches</pluralLabel>'+
+							    '<searchLayouts>'+
+							        '<customTabListAdditionalFields>Branch_Name__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>Branch_Description__c</customTabListAdditionalFields>'+
+							        '<customTabListAdditionalFields>LAST_UPDATE</customTabListAdditionalFields>'+
+							    '</searchLayouts>'+
+							    '<sharingModel>ReadWrite</sharingModel>'+
+							'</CustomObject>';
+			var updateSearchLayoutsAndListView = $("[id$='updateSearchLayoutsAndListView']").prop('checked') == true;
+			if(updateSearchLayoutsAndListView) {    	
+				flosumTabandListViewMap['objects/Patch__c.object']  = patchXml;
+				flosumTabandListViewMap['objects/Commit__c.object'] = commitXml;
+				flosumTabandListViewMap['objects/Build__c.object']  = buildXml;
+				flosumTabandListViewMap['objects/Branch__c.object'] = branchXml;
+			}
+			
+			for(var key in flosumTabandListViewMap)
+			{
+				var fileName = NameSpacePrefix != '' ? NameSpacePrefix+'/'+key : key;
+				myZip.file(fileName,flosumTabandListViewMap[key]);
+			}
+
+			flosumPackageXml+='<types>';
+			flosumPackageXml+='<members>*</members>';
+			flosumPackageXml+='<name>CustomObject</name>';
+			flosumPackageXml+='</types>';
+			flosumPackageXml+='<types>';
+			flosumPackageXml+='<members>*</members>';
+			flosumPackageXml+='<name>ListView</name>';
+			flosumPackageXml+='</types>';
+			flosumPackageXml+='<version>35.0</version>';
+			flosumPackageXml+='</Package>';
+			myZip.file(flosumPackageXmlName,flosumPackageXml);
+			var deployZipStr = myZip.generate({type:"base64",compression:"DEFLATE"});
+			if(NameSpacePrefix != '')
+				deployLayout(deployZipStr,true);
+			else
+				deployLayout(deployZipStr,false);
+		}
+		
+		function createApplicationZip()
+		{
+			var flosumPackageXmlName= NameSpacePrefix != '' ? NameSpacePrefix+'/package.xml' : 'package.xml';
+			var flosumPackageXml = '';
+			flosumPackageXml+='<?xml version="1.0" encoding="UTF-8"?>';
+			flosumPackageXml+='<Package xmlns="http://soap.sforce.com/2006/04/metadata">';
+			
+			var myZip = new JSZip();
+			if(NameSpacePrefix != '')
+			{
+				flosumPackageXml+='<fullName>'+NameSpacePrefix+'</fullName>';
+				flosumPackageXml+='<apiAccessLevel>Unrestricted</apiAccessLevel>';
+				flosumPackageXml+='<namespacePrefix>'+NameSpacePrefix+'</namespacePrefix>';
+			}
+			//custom application
+			flosumPackageXml+='<types>';
+			var isLogoExist = {!isLogoExist};
+			if(isLogoExist)
+			{
+				for(var key in flosumAppMap)
+				{
+					var fileName = NameSpacePrefix != '' ? NameSpacePrefix+'/'+key : key;
+	                myZip.file(fileName ,flosumAppMap[key]);
+				}
+			}
+			else{
+				for(var key in flosumNoLogoAppMap)
+				{
+					var fileName = NameSpacePrefix != '' ? NameSpacePrefix+'/'+key : key;
+	                myZip.file(fileName ,flosumNoLogoAppMap[key]);
+				}
+			}
+			flosumPackageXml+='<members>Flosum</members>';
+			flosumPackageXml+='<name>CustomApplication</name>';
+			flosumPackageXml+='</types>';
+			flosumPackageXml+='<version>33.0</version>';
+			flosumPackageXml+='</Package>';
+			myZip.file(flosumPackageXmlName,flosumPackageXml);
+			var deployZipStr = myZip.generate({type:"base64",compression:"DEFLATE"});
+			if(NameSpacePrefix != '')
+				deployLayout(deployZipStr,true);
+			else
+				deployLayout(deployZipStr,false);
+		}
+		
+		function createProfilePermissionZip(profileNames,profileXml)
+		{
+			if(profileNames != '')
+			{
+				var myZip = new JSZip();
+				var proLi = JSON.parse(profileNames);
+				var packageXmlPre = '<?xml version="1.0" encoding="UTF-8"?><Package xmlns="http://soap.sforce.com/2006/04/metadata">';
+				packageXmlPre+=	'<types>';	    
+				for(var key in proLi)
+				{
+					myZip.file(key,profileXml);
+					packageXmlPre+=	'<members>'+proLi[key]+'</members>';	
+				}
+				packageXmlPre+=	'<name>Profile</name></types>';
+				packageXmlPre+=	'<version>33.0</version></Package>';
+				myZip.file(packageXmlName,packageXmlPre);
+				var deployZipStr = myZip.generate({type:"base64",compression:"DEFLATE"});
+				deployLayout(deployZipStr,false);
+			}
+			else
+			{
+				hide();
+			}
+		}
+		
+		function checkDeploymentStatus(asyncId,isProfileFirstStep)
+		{
+			if(asyncId != undefined && asyncId != null && asyncId.length == 18)
+			{
+				setTimeout(checkStatus, 5000);
+			}
+			else
+			{
+				if(isProfileFirstStep)
+				{
+					profileSecondStep();
+				}
+				else
+					hide(); 
+			}
+		}
+		
+		function listRemoteSiteSetting(RSURL,placeOfEX)
+		{
+			var reg = /[^a-zA-Z0-9]+/g
+		    var host = RSURL;
+		    var fullName = RSURL.slice(8,RSURL.indexOf('.visual.force.com'));
+		    fullName = fullName.replace(reg,'');
+		    var firstChar = fullName.charAt(0);
+			if(firstChar >= 0 && firstChar <= 9)
+			{
+			    fullName = 'A' + fullName;
+			}
+		    
+			var ExistingNames = {};
+			var selfConn = new flosumsf.Connection({ accessToken: '{!$API.Session_Id}' });
+			var queryLi = [];
+        	var query = new Object();
+        	query.folder = '';
+        	query.type = 'RemoteSiteSetting';
+        	queryLi.push(query);
+        	selfConn.metadata.list(queryLi, '34.0', function(err,result){
+        		if(err) 
+            	{
+            		console.log(err);
+            	}
+            	else
+            	{
+            		if(Array.isArray(result))
+           			{
+           				for(var index in result)
+           				{
+           					if(index < result.length)
+           					{
+           						var mi = result[index];
+           						ExistingNames[mi.fullName]= mi.fullName;
+           					}
+           				}
+           			}
+           			else
+           			{
+           				ExistingNames[result.fullName]= result.fullName;
+           			}
+           			var remoteSite = new Object();
+           			remoteSite.fullName = ExistingNames[fullName] != undefined ?  getRemoteSiteName(fullName+'1',ExistingNames) : fullName;
+           			remoteSite.description = 'Metadata API Remote Site Setting for Flosum Application';
+           			remoteSite.isActive = true;
+           			remoteSite.url = host;
+           			selfConn.metadata.create('RemoteSiteSetting',remoteSite,function(err2,result2){
+           				if(err2) 
+		            	{
+		            		console.log(err2);
+		            		hide();
+		            	}
+		            	else
+		            	{
+		            		if(result2 != undefined && result2.success)
+		            		{
+		            			console.log('Created Successfully.');
+		            			location.reload();
+		            		}
+		            		else
+		            		{
+		            			console.log(JSON.stringify(result2.errors));
+		            			hide();
+		            		}
+		            	}
+           			});
+            	}
+        	});
+		}
+			
+		function getRemoteSiteName(fullName,ExistingNames)
+		{
+			if(ExistingNames[fullName] != undefined)
+			{
+				fullName = calculateName(fullName);
+				return getRemoteSiteName(fullName,ExistingNames);
+			}
+			else
+			{
+				return fullName;
+			}
+		}
+		
+		function calculateName(input)
+		{
+			var result = input;
+			var i = input.length;
+			var last = input.charAt(--i);
+			if(isNaN(last))
+			{
+				return result+'1';
+			}
+			else
+			{
+                   last = parseInt(last) + 1;
+                   result = result.slice(0,result.length - 1);
+				return result  + ''+last ;
+			}
+		}
+	</script>
+</apex:page>

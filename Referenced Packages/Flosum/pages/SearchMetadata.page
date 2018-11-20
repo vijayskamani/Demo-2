@@ -1,0 +1,1701 @@
+<apex:page controller="Flosum.SearchMetadataController" sidebar="false"  doctype="html-5.0" cache="false" id="pg">
+ 
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.min.js')}"/>
+    <apex:stylesheet value="{!URLFOR($Resource.Flosum__Merge, 'Merge/css/jquery-ui.css')}" />
+    <apex:stylesheet value="{!URLFOR($Resource.Flosum__Merge, 'Merge/css/bootstrapSF.min.css')}" />
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/jquery-2.1.4.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/angular.min.js')}"/> 
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/angular-base64.min.js')}"/>
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/bootstrap.min.js')}"/> 
+
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/progressbar.js')}"/> 
+	<apex:includeScript value="{!$Resource.Flosum__X2JS}"/>
+
+ 
+    <style type="text/css">
+		.activeTab {background-color:#236FBD; color:black;  tab-color:yellow; background-image:none}
+      	.inactiveTab {background-color:white; color:black; 	background-image:none}
+      	body .bPageTitle .ptBody h1.noSecondHeader {
+		    color: #000;
+		}
+        .pagination { 
+            padding: 1%; 
+        } 
+        div .pagination { 
+            text-align: center; 
+        } 
+        td .dataCell label { 
+            font-weight: normal; 
+        } 
+        span.paginationEle { 
+            margin-left: 4px; 
+        } 
+        .pagination input { 
+            margin-left: 4px; 
+        } 
+        hr.pBlockDescription {
+            margin-top: 0%;
+            border-bottom: 1px solid #DBDBDB;
+        }
+        tr {
+            display: table-row;
+            vertical-align: inherit;
+            border-color: inherit;
+        }
+        .EmpyBlock {
+            height: 18px;
+        }
+  
+  		.btn-warning:hover, .btn-warning:focus, .btn-warning:active, .btn-warning.active, .open>.dropdown-toggle.btn-warning {
+  			color: #000;
+  		} 
+  		.btn-success:hover, .btn-success:focus, .btn-success:active, .btn-success.active, .open>.dropdown-toggle.btn-success {
+  			color: #000;
+  		} 
+	</style>
+<!--     <c:Wait /> -->
+    <apex:pagemessages id="msg"/>
+	<apex:form id="allCompForm">
+		<apex:actionfunction name="back" action="{!back}" />
+        <div ng-app="searchApp">               
+         	<div ng-controller ="SearchMetadataControllerAJS"  id="angularControllerId">
+           		<div class="ng-cloak">
+           		
+           			        <!--  block for tables display  -->
+ 		        <apex:pageBlock html-ng-show="SearchStep == 0" id="FirstPageBlock"> 
+  				    <apex:sectionHeader title="Search metadata" description="Used to search metadata in Flosum's database (by content)" />
+
+			    	<apex:pageBlock id="searchblock">
+						<apex:pageBlockSection columns="2" id="pbs1">
+            	    		<apex:pageBlockSectionItem id="pbsi1">
+                    			<apex:outputLabel value="Search for: " />
+		                		<apex:outputPanel >
+					            	<apex:inputText size="40" html-ng-model="searchField" id="searchField"  html-ng-disabled="disableAllUI" />           
+		  						</apex:outputPanel>
+		                	</apex:pageBlockSectionItem>
+ 	    		            <apex:pageBlockSectionItem >
+    	        		        <apex:outputLabel value="Case insensitive"/>
+        	            		<input type="checkbox" class="psli"  ng-model="bCaseInsensitive" html-ng-disabled="disableAllUI"/>
+            	    		</apex:pageBlockSectionItem>
+		        	   	</apex:pageBlockSection>
+						<apex:pageBlockSection columns="2" id="pbs2">
+ 	    		            <apex:pageBlockSectionItem >
+    	        		        <apex:outputLabel value="Search in branches"/>
+        	            		<input type="checkbox" class="psli"  ng-model="bSearchInBranches" html-ng-disabled="disableAllUI"/>
+            	    		</apex:pageBlockSectionItem>
+ 	    		            <apex:pageBlockSectionItem >
+  									<apex:outputLabel value="Filter" html-ng-show="bSearchInBranches"/>
+        	                   		<select style="width: 60%;padding: 0px 0px;float: left;" ng-model="brSelect"  class="form-control" ng-options="DS.elemId as DS.name for DS in allBranches" ng-show="bSearchInBranches">
+									</select>
+            	    		</apex:pageBlockSectionItem>
+ 	    		            <apex:pageBlockSectionItem >
+    	        		        <apex:outputLabel value="Search in repositories"/>
+        	            		<input type="checkbox"  class="psli"  ng-model="bSearchInRepositories" html-ng-disabled="disableAllUI"/>
+            	    		</apex:pageBlockSectionItem>
+ 	    		            <apex:pageBlockSectionItem >
+  									<apex:outputLabel value="Filter" html-ng-show="bSearchInRepositories"/>
+        	                   		<select style="width: 60%;padding: 0px 0px;float: left;" ng-model="rSelect"  class="form-control" ng-options="DS.elemId as DS.name for DS in allRepos" ng-show="bSearchInRepositories">
+									</select>
+            	    		</apex:pageBlockSectionItem>
+ 	    		            <apex:pageBlockSectionItem >
+    	        		        <apex:outputLabel value="Search in snapshots"/>
+        	            		<input type="checkbox"  class="psli"  ng-model="bSearchInSnapshots" html-ng-disabled="disableAllUI"/>
+            	    		</apex:pageBlockSectionItem>
+ 	    		            <apex:pageBlockSectionItem >
+  									<apex:outputLabel value="Filter" html-ng-show="bSearchInSnapshots"/>
+        	                   		<select style="width: 60%;padding: 0px 0px;float: left;" ng-model="sSelect"  class="form-control" ng-options="DS.elemId as DS.name for DS in allSnaps" ng-show="bSearchInSnapshots">
+									</select>
+            	    		</apex:pageBlockSectionItem>
+		        	   	</apex:pageBlockSection>
+						<apex:pageBlockButtons location="bottom" id="pbb1">
+						   	<apex:commandbutton value="Cancel" html-ng-click="cancel();" reRender="msg"  id="button2" />
+							<apex:commandButton value="Search" html-ng-click="search();" reRender="none"  html-ng-disabled="disableAllUI" id="button1"/>
+						</apex:pageBlockButtons>
+					</apex:pageBlock>
+				<apex:pageBlockSection columns="1" id="pbs3">
+					<apex:pageBlockSectionItem html-ng-show="showProgress">
+						<div class="progress" >
+    	          			<div class="progress-bar progress-bar-info	progress-bar-striped active" style="width: 0%;     background-color: rgba(120, 255, 77, 0.5); text-align: center; position: absolute;" id="progressBar">&nbsp;</div>
+        	      			<div id="progress" style="text-align: center;"> </div>
+            	    	</div>
+            	    	<div id="subprogress" style="text-align: center;"> 10%</div>
+					</apex:pageBlockSectionItem>
+				</apex:pageBlockSection>
+				</apex:pageBlock>
+
+				<apex:pageblock html-ng-show="branchComponents.length > 0 && !showProgress">
+            	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>Branch components&nbsp;&nbsp;&nbsp;</h4>
+                		  	<div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body"> Branch components</div>
+	   							    </div>
+	   						</div>	    
+						  </td>
+			              <td align="right"><a ng-click="branch.showHideBlock();" style="cursor: pointer;">{{branch.showHideFlag ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table  class="list" ng-show="branch.showHideFlag">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th>
+                             	<a ng-click="branch.refreshOrderBy('compName')">{{ branch.orderByColumn == 'compName' ? branch.isReverse ? 'Component name ▼' : 'Component name ▲' : 'Component name ' }}</a>
+                             </th>
+                             <th ng-repeat = "(key, value) in fieldSet2">
+                                <a ng-click="branch.refreshOrderBy(key)">{{ branch.orderByColumn == key ? branch.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in branchComponents |  orderBy: branch.orderByColumn : branch.isReverse | limitTo: branch.viewLimit" ng-if="$index >= branch.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td> <a href="/{{item.compId}}" target="_blank">{{item['compName']}} </a></td>
+                            <td ng-repeat = "(key, value) in fieldSet2">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="branchComponents.length > 0 && branch.showHideFlag" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="branch.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="branch.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="branch.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="branch.isPrevious() || disableNextPrevious" />
+                   Total {{(branchComponents).length}} component(s), Page {{branch.currentPageNo((branchComponents).length)}} of {{branch.totalPageCount((branchComponents).length)}}
+                   <apex:commandbutton html-ng-click="branch.listNext((branchComponents).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="branch.isNext((branchComponents).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="branch.showLast((branchComponents).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="branch.isNext((branchComponents).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+           		</apex:pageblock>
+				
+				<apex:pageblock html-ng-show="repoComponents.length > 0 && !showProgress">
+            	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>Repository components&nbsp;&nbsp;&nbsp;</h4>
+                		  	<div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body"> Repository components</div>
+	   							    </div>
+	   						</div>	    
+						  </td>
+			              <td align="right"><a ng-click="repo.showHideBlock();" style="cursor: pointer;">{{repo.showHideFlag ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table  class="list" ng-show="repo.showHideFlag">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th><a ng-click="repo.refreshOrderBy('compName')">{{ repo.orderByColumn == 'compName' ? repo.isReverse ? 'Component name ▼' : 'Component name ▲' : 'Component name ' }}</a></th>
+                             <th ng-repeat = "(key, value) in fieldSet1">
+                                <a ng-click="repo.refreshOrderBy(key)">{{ repo.orderByColumn == key ? repo.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in repoComponents |  orderBy: repo.orderByColumn : repo.isReverse | limitTo: repo.viewLimit" ng-if="$index >= repo.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td> <a href="/{{item.compId}}" target="_blank">{{item['compName']}} </a></td>
+                            <td ng-repeat = "(key, value) in fieldSet1">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="repoComponents.length > 0 && repo.showHideFlag" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="repo.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="repo.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="repo.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="repo.isPrevious() || disableNextPrevious" />
+                   Total {{(repoComponents).length}} component(s), Page {{repo.currentPageNo((repoComponents).length)}} of {{repo.totalPageCount((repoComponents).length)}}
+                   <apex:commandbutton html-ng-click="repo.listNext((repoComponents).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="repo.isNext((repoComponents).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="repo.showLast((repoComponents).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="repo.isNext((repoComponents).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+           		</apex:pageblock>
+           		
+ 				<apex:pageblock html-ng-show="snapshotComponents.length > 0 && !showProgress">
+            	<apex:facet name="header">
+		            <table width="100%">
+        		      <tr>
+                		  <td align="left"><h4>Snapshot components&nbsp;&nbsp;&nbsp;</h4>
+                		  	<div class="mouseOverInfoOuter" id="searchInvoiceHelper" onfocus="addMouseOver(this)" onmouseover="addMouseOver(this)" tabindex="0">
+	   				 			<img src="/s.gif" alt="" class="infoIcon" title="" />
+	    							<div class="mouseOverInfo" id="searchInvoiceHelperText" style="display: none; opacity: -0.19999999999999996; left: 16px;">
+	        							<div class="body"> Snapshot components</div>
+	   							    </div>
+	   						</div>	    
+						  </td>
+			              <td align="right"><a ng-click="snap.showHideBlock();" style="cursor: pointer;">{{repo.showHideFlag ? 'hide':'show'}}</a></td>
+        		      </tr>
+		            </table>
+        		</apex:facet>
+                <table  class="list" ng-show="snap.showHideFlag">
+                	<thead>
+                    	<tr class="headerRow">
+                             <th>No.</th>
+                             <th><a ng-click="snap.refreshOrderBy('compName')">{{ snap.orderByColumn == 'compName' ? snap.isReverse ? 'Component name ▼' : 'Component name ▲' : 'Component name ' }}</a></th>
+                             <th ng-repeat = "(key, value) in fieldSet0">
+                                <a ng-click="snap.refreshOrderBy(key)">{{ snap.orderByColumn == key ? snap.isReverse ? value+' ▼' : value+' ▲' : value }}</a>
+                             </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                       <tr ng-repeat = "item in snapshotComponents |  orderBy: snap.orderByColumn : snap.isReverse | limitTo: snap.viewLimit" ng-if="$index >= snap.metaOffSet" class="dataRow" onmouseover="if (window.hiOn){hiOn(this);} " onmouseout="if (window.hiOff){hiOff(this);} ">
+                            <td>{{ $index+1 }}</td>
+                            <td> <a href="/{{item.Id}}" target="_blank">{{item['compName']}} </a></td>
+                            <td ng-repeat = "(key, value) in fieldSet0">
+                                 {{ item[key] }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <apex:outputPanel html-ng-show="snapshotComponents.length > 0 && snap.showHideFlag" styleClass="pagination" layout="block" style="text-align: center;">
+                   <apex:commandbutton html-ng-click="snap.showFirst();" onClick="return false;" value="First" reRender="none" html-ng-disabled="snap.isPrevious() || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="snap.listPrevious();" onClick="return false;" value="Previous" reRender="none" html-ng-disabled="snap.isPrevious() || disableNextPrevious" />
+                   Total {{(snapshotComponents).length}} component(s), Page {{snap.currentPageNo((snapshotComponents).length)}} of {{snap.totalPageCount((snapshotComponents).length)}}
+                   <apex:commandbutton html-ng-click="snap.listNext((snapshotComponents).length);" onClick="return false;" value="Next" reRender="none" html-ng-disabled="snap.isNext((snapshotComponents).length) || disableNextPrevious"/>
+                   <apex:commandbutton html-ng-click="snap.showLast((snapshotComponents).length);" onClick="return false;" value="Last" reRender="none" html-ng-disabled="snap.isNext((snapshotComponents).length) || disableNextPrevious"/>
+                </apex:outputPanel>
+           		</apex:pageblock>
+           		
+           		</div>
+           	</div>
+        </div>
+	</apex:form>  
+   <script>
+   const DEBUG_MODE = false;
+   const ESCAPE_MODE = false;
+   const CONSIDER_META = false;
+   
+   const BLOCK_SIZE = 2500000;
+   const HIST_BLOCK_SIZE = 2000000;
+   const COMP_BLOCK_SIZE = 10000;
+   
+   var searchRegExp;
+
+
+   Visualforce.remoting.timeout = 120000;
+   
+      var notSearchable = new Object();
+   notSearchable['package.xml'] = true;
+   
+   		var mmap = new Object();
+	    mmap['CustomField'] = true;
+	    mmap['CustomLabel'] = true;
+	    mmap['CompactLayout'] = true;
+	    mmap['WebLink'] = true;
+	    mmap['RecordType'] = true;
+	    mmap['ListView'] = true;
+	    mmap['FieldSet'] = true;
+	    mmap['AssignmentRule'] = true;
+	    mmap['AutoResponseRule'] = true;
+	    mmap['ValidationRule'] = true;
+	    mmap['WorkflowTask'] = true;
+		mmap['WorkflowOutboundMessage'] = true;
+		mmap['WorkflowFieldUpdate'] = true;
+		mmap['WorkflowKnowledgePublish'] = true;
+		mmap['WorkflowAlert'] = true;
+		mmap['WorkflowRule'] = true;
+		
+		mmap['SharingOwnerRule'] = true;
+		mmap['SharingCriteriaRule'] = true;
+		mmap['BusinessProcess'] = true;
+		mmap['SharingReason'] = true;
+		mmap['EscalationRule'] = true;
+		mmap['MatchingRule'] = true;
+		mmap['ManagedTopic'] = true;
+   
+   var fileMap = {};
+	
+ 
+   
+   if(typeof jQuery != 'undefined'){
+       $j =jQuery.noConflict();
+   }
+   
+   	function setDefaultMessageOnPage(str)
+	{
+         if($j('#msg') != undefined)
+         {
+             $j('#msg').remove();
+         }
+         var parentVal = $j("[id$='msg']");
+         if(parentVal != undefined && str!='')
+         {
+              var childVal = '<span id="msg"><span ><div class="message warningM4" role="alert">'+
+               				'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+               				'<tbody><tr valign="top"><td><img alt="warning" class="" src="/s.gif" title="warning"></td>'+
+               				'<td class="messageCell"><div id="j_id0:meta:j_id15:j_id16:j_id18" class="messageText"><span>'+str+'</span></div></td></tr>'+
+               				'</tbody></table></div></span>'+
+               				'</span>';
+              parentVal.before(childVal);
+         }
+	}
+
+	function showErrorMessage(str)
+    {
+        if($j('#msg') != undefined)
+        {
+            $j('#msg').remove();
+        }
+        var parentVal = $j("[id$='msg']");
+        if(parentVal != undefined)
+        {
+            var childVal = '<span id="msg">'+
+                            '<span>'+
+                                '<div class="message errorM3" role="alert">'+
+                                    '<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+                                        '<tbody>'+
+                                            '<tr valign="top">'+
+                                            '<td>'+
+                                                '<img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR">'+
+                                            '</td>'+
+                                            '<td class="messageCell">'+
+                                                '<div class="messageText">'+
+                                                    '<span style="color:#cc0000">'+
+                                                        '<h4>Error:</h4>'+
+                                                    '</span>'+
+                                                    str+'<br>'+
+                                                '</div>'+
+                                            '</td>'+
+                                            '</tr>'+
+                                            '<tr>'+
+                                                '<td></td>'+
+                                                '<td></td>'+
+                                            '</tr>'+
+                                        '</tbody>'+
+                                    '</table>'+
+                                '</div>'+
+                            '</span>'+
+                        '</span>';
+             parentVal.before(childVal);
+        }
+        unbindWindow();
+   }
+        
+   function unbindWindow()
+   {
+        $j(window).unbind();
+   }
+    
+   
+        var Page = function(obj){
+             	////console.log('creating a page')
+            	this.staticLimit = 20;
+                this.orderByColumn = 'compName';
+            	this.isReverse = false;
+            	this.metaOffSet = 0;
+            	this.totalRecords = 0;
+            	this.viewLimit = this.staticLimit;
+            	this.showHideFlag = true;
+        		if (obj != undefined){
+        			if (obj.OrderByColumn != undefined){ this.orderByColumn = obj.OrderByColumn;}
+        			if (obj.isReverse != undefined){ this.isReverse = obj.isReverse;}
+        			if (obj.metaOffSet != undefined){ this.metaOffSet = obj.metaOffSet;}
+        			if (obj.totalRecords != undefined){ this.totalRecords = obj.totalRecords;}
+        			if (obj.viewLimit != undefined){ this.viewLimit = obj.viewLimit;}
+        		}
+		}
+		Page.prototype.showHideBlock = function() {
+                this.showHideFlag = (this.showHideFlag)? false : true;
+        };    
+        Page.prototype.refreshOrderBy = function(orderVal) {
+                this.metaOffSet = 0;
+                this.viewLimit = this.metaOffSet + this.staticLimit;
+                if(orderVal === this.orderByColumn)
+                    this.isReverse = !this.isReverse;
+                else
+                {
+                    this.isReverse = false;
+                    this.orderByColumn = orderVal;
+                }
+        };
+        Page.prototype.showFirst = function() {
+                this.metaOffSet = 0;
+                this.viewLimit = this.staticLimit;
+        };
+        Page.prototype.listPrevious = function() {
+                this.metaOffSet = this.metaOffSet - this.staticLimit;
+                if(this.metaOffSet < 0)
+                    this.metaOffSet = 0;
+                this.viewLimit = this.metaOffSet + this.staticLimit;
+        };
+        Page.prototype.listNext = function(tempTotal) {
+                if((this.metaOffSet + this.staticLimit) < tempTotal)
+                {
+                    this.metaOffSet = this.metaOffSet + this.staticLimit;
+                    this.viewLimit = this.metaOffSet + this.staticLimit;
+                }
+        };
+        Page.prototype.showLast = function(tempTotal) {
+                this.metaOffSet = tempTotal - (tempTotal % this.staticLimit);
+                if(this.metaOffSet == tempTotal && this.metaOffSet != 0)
+                {
+                    this.metaOffSet = tempTotal - this.staticLimit;
+                }
+                this.viewLimit = this.metaOffSet + this.staticLimit;
+        };
+        Page.prototype.isPrevious = function() {
+                if(this.metaOffSet < 1) 
+                    return true;
+                else {
+                    return false;
+                }
+        };
+        Page.prototype.isNext = function(tempTotal){
+                if(tempTotal > this.metaOffSet+this.staticLimit){
+                    return false;
+                }
+                else {
+                    return true;
+                }
+        };
+        Page.prototype.totalPageCount = function(tempTotal){
+                var totalPage = parseInt(tempTotal % this.staticLimit > 0 ? (tempTotal / this.staticLimit)+1 : (tempTotal / this.staticLimit));
+                return totalPage;
+                
+        };
+        Page.prototype.currentPageNo = function(tempTotal){
+                var currentPage = 1;
+                if(this.metaOffSet <  this.staticLimit)
+                    currentPage =  1;
+                else
+                {
+                    currentPage = Math.ceil(this.metaOffSet / this.staticLimit)+1;
+                }
+                return currentPage;
+        };
+ 
+ 
+    
+   /****** 			angularJs modules description				******/
+    
+   var myApp = angular.module("searchApp", ['base64']);
+   
+   myApp.service('dataManager', function($q) {
+            return {
+                getData : function(attIdsList) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getData}',
+                        JSON.stringify(attIdsList),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                },
+                getComponentDetails : function(compIdsList) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getComponentDetails}',
+                        JSON.stringify(compIdsList),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                },
+                getComponentDescription : function(sourceId, isBranch) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getComponentDescription}',
+                        sourceId,
+                        isBranch,
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                },
+                getOrgDescription : function(req) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getOrgDescription}',
+                        JSON.stringify(req),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                },
+                getComponents : function(list) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getComponents}',
+                        JSON.stringify(list),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                },
+                getSnapshotDescription : function(id) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getSnapshotDescription}',
+                        id,
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                },
+                getMetaItems : function(list) {
+                    var deferred = $q.defer();
+                    
+                    Visualforce.remoting.Manager.invokeAction(
+                        '{!$RemoteAction.SearchMetadataController.getMetaItems}',
+                        JSON.stringify(list),
+                        function(result, event) {
+                            if (event.status) {
+                                deferred.resolve(result);
+                            }
+                            else {
+                                deferred.reject(event);
+                            }
+                        });
+                    return deferred.promise;
+                }
+             }
+    });
+    
+    var updaterAlive = false;
+    var subprogress = 0;
+    function updateSubProgressStatus(title,number){
+    		if (title != undefined){
+    			if (number == undefined) number = 0;
+	   			$j('#subprogress').html(title + number + ' components');
+   			}else{
+	   			$j('#subprogress').html('starting...');
+   			}
+    }
+    
+    function updateSubProgress(title, number){
+    	subprogress ++;
+   		updateSubProgressStatus(title,number);
+    }
+    
+   
+    myApp.$inject = ['$scope', '$filter','$controller'];
+   
+    var app = myApp.controller("SearchMetadataControllerAJS", function($scope, $base64, $controller, dataManager, $filter,  $interval, $timeout, filterFilter) {
+   		$scope.enableTables = false;
+   		$scope.bSearchInSnapshots = false;
+   		$scope.bSearchInBranches = false;
+   		$scope.bSearchInRepositories = false;
+   		$scope.bCaseInsensitive = false;
+   		
+   		$scope.showProgress = false;
+   		$scope.disableAllUI = false;
+   		$scope.disableNextPrevious = false;
+   		$scope.searchField = '';
+   		$scope.SearchStep = 0;
+   		
+   		//map of Ids of snapshots
+   		$scope.snapshots = {};
+   		$scope.branches = {};
+   		$scope.repositories = {};
+   		
+   		$scope.found = false;
+   		$scope.foundPointer;
+   		$scope.foundInSnapshots = {};
+   		$scope.foundInBranches = {};
+   		$scope.db = {};
+   		$scope.tasks = [];
+   		$scope.taskNumber = 0;
+   		var total,progress;
+
+   		$scope.compBranchesMap = {};
+   		
+   		$scope.foundInRepositories = {};
+  		
+   		$scope.branchComponents = [];
+   		$scope.repoComponents = [];
+   		$scope.snapshotComponents = [];
+   		$scope.blockIdx = 0;
+   		
+   		$scope.allBranches = [{"elemId":"", "name":"Loading..."}];
+   		$scope.brSelect = '';
+   		$scope.allRepos = [{"elemId":"", "name":"Loading..."}];
+   		$scope.rSelect = '';
+   		$scope.allSnaps = [{"elemId":"", "name":"Loading..."}];
+   		$scope.sSelect = '';
+   		
+        $scope.fieldSet2 = {'compType':'Component Type','branchName':'Branch Name','version':'Version'};
+        $scope.fieldSet1 = {'compType':'Component Type','repoName':'Repository Name','version':'Version'};
+		$scope.fieldSet0 = {'compType':'Component Type','snapshot':'Snapshot Name'};
+        
+        function updateProgressStatus(value,txt){
+        	if (txt != undefined){
+	   			$j('#progress').html('' + txt);
+        	}
+        	$j('#progressBar').css('width', value + '%');
+        }
+        
+        function sortByName(arr){
+        	if (arr == undefined || arr.length == 0) return arr;
+        	return arr.sort(function(a,b){return a.name < b.name? -1: 1;});
+        }
+        
+        function escapeSingleQuotes(str){
+        	if (str == undefined || str == '') return str;
+        	return str.replace(new RegExp('&#39;', 'g'),'\'');
+        }
+        
+        function correctNames(arr){
+        	if (arr == undefined || arr.length == 0) return arr;
+        	for (var x = 0; x < arr.length; x++ ){
+        		arr[x].name = escapeSingleQuotes(arr[x].name);
+        	}
+        	return arr;
+        }
+ 
+        
+        $scope.initLoad = function (){
+        	$scope.branch = new Page({orderByColumn:'compName',isReverse : true});
+        	$scope.repo = new Page({orderByColumn:'compName',isReverse : true});
+        	$scope.snap = new Page({orderByColumn:'compName',isReverse : true});
+     			var request = {};
+   			request.bBranch = true;
+   			request.bRepository = true;
+   			request.bSnapshot = true;
+   			dataManager.getOrgDescription(request).then(
+                    function (data) {
+
+                    	if (data != undefined){// process all branches and repositories
+                    		$scope.allBranches = [{"elemId":"", "name":"-- All branches --"}];
+							var branches =   correctNames(data.branches);                 		
+                    		$scope.allBranches = $scope.allBranches.concat(sortByName(branches));
+                    		$scope.allRepos = [{"elemId":"", "name":"-- All repositories --"}];
+							var repositories =   correctNames(data.repositories);                 		
+                    		$scope.allRepos = $scope.allRepos.concat(sortByName(repositories));
+                    		$scope.allSnaps = [{"elemId":"", "name":"-- All snapshots --"}];
+							var snapshots =   correctNames(data.snapshots);                 		
+                    		$scope.allSnaps = $scope.allSnaps.concat(sortByName(snapshots));
+                    	}else{// returns null, nothing to search, continue
+                    		$scope.showProgress = false;
+                    		$scope.disableAllUI = false;
+      						setDefaultMessageOnPage('Nothing found');
+                    	}
+                    },
+                    function (error) {// stop search, display message
+                    }
+            );
+ 			
+   		}
+   		
+   		$scope.initLoad();
+   		
+   		// return record from list matching id
+   		function getRecordbyId(list,id){
+   			if (list == undefined || id == undefined || id == '') return;
+   			for (var x = 0; x < list.length; x++){
+				if (list[x].elemId === id){
+					return list[x];
+				}   				
+   			}
+   		}
+
+   		// return record from list matching id
+   		function getRecords(list){
+   			var lst = [];
+   			if (list == undefined ) return lst;
+   			for (var x = 0; x < list.length; x++){
+				if (list[x].elemId !== ''){
+					lst.push(list[x]);
+				}   				
+   			}
+   			return lst;
+   		}
+   		
+   		$scope.resetResults = function (){
+   			console.log('reset all search results');
+   			setDefaultMessageOnPage('');
+   			$scope.initLoad();
+   			$scope.snapshots = {};
+	   		$scope.found = false;
+	   		$scope.foundInSnapshots = {};
+	   		// map of all component history records which zip contains  a str 
+   			$scope.foundInBranches = {};
+   			$scope.foundInRepositories = {};
+	   		$scope.branchComponents = [];
+	   		$scope.repoComponents = [];
+	   		$scope.snapshotComponents = [];
+	   		$scope.db = {};
+	   		$scope.tasks = [];
+	   		$scope.taskNumber = -1;
+	   		if ($scope.bSearchInBranches){
+	   			$scope.tasks.push('branches');
+	   		}
+			if ($scope.bSearchInRepositories){
+	   			$scope.tasks.push('repositories');
+	   		}
+			if ($scope.bSearchInSnapshots){
+	   			$scope.tasks.push('snapshots');
+	   		}
+	   		if ($scope.brSelect === ''){
+	   			$scope.db['branches'] = getRecords($scope.allBranches);
+	   		}else{
+	   			$scope.db['branches'] = [];
+	   			$scope.db['branches'].push(getRecordbyId($scope.allBranches,$scope.brSelect));
+	   		}
+	   		if ($scope.rSelect === ''){
+	   			$scope.db['repositories'] = getRecords($scope.allRepos);
+	   		}else{
+	   			$scope.db['repositories'] = [];
+	   			$scope.db['repositories'].push(getRecordbyId($scope.allRepos,$scope.rSelect));
+	   		}
+	   		if ($scope.sSelect === ''){
+	   			$scope.db['snapshots'] = getRecords($scope.allSnaps);
+	   		}else{
+	   			$scope.db['snapshots'] = [];
+	   			$scope.db['snapshots'].push(getRecordbyId($scope.allSnaps,$scope.sSelect));
+	   		}
+	   		total = 0; progress = 0;// global vars, used to setup progress bar params
+            for (var x = 0; x < $scope.tasks.length; x++){
+            		total += $scope.db[$scope.tasks[x]].length;
+            }
+	   		subprogress = 0;// total number of processed components
+	   		updaterAlive = true;
+	   		updateSubProgressStatus();
+   		}
+   		
+   		$scope.cancel = function (){
+   			back();
+		}
+   		
+   		$scope.search = function (){
+   			$scope.resetResults();
+   			console.log('start ng search for: '+$scope.searchField);
+   			
+   			if ($scope.searchField == '' || $scope.searchField == undefined){
+   				setDefaultMessageOnPage('Nothing found');
+   				return;
+   			}else{
+   				searchRegExp = new RegExp($scope.searchField.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&"), "i");
+   				console.log('start ng search for: '+ JSON.stringify(searchRegExp));
+   			}
+   			
+   			updateProgressStatus(0,'');
+   			$scope.showProgress = true;
+   			$scope.disableAllUI = true;
+       		$scope.processRequest();
+   			
+  		}
+   		
+   		var branchIndex = 0;
+   		var branchList = [];
+   		var currentBranchComponentsLi = [];
+   		var accumulativeBranchComponentsLi = [];
+   		var accIndex = 0;
+   		var accumulativeDefinitionsLi = [];
+   		var accumulativeDefinitionsMap = {};
+   		
+   		$scope.processRequest = function (){
+   			console.log('tasks:'+JSON.stringify($scope.tasks));
+   			$scope.taskNumber ++;
+   			if ($scope.taskNumber < $scope.tasks.length){
+   				var mode =  $scope.tasks[$scope.taskNumber];
+   				if (mode == 'snapshots'){
+ 		   			if ($scope.db[mode] != undefined){
+    			       	branchIndex = 0;
+   			    	   	branchList = $scope.db[mode];
+						$scope.processSnapshots();
+					}
+					return;
+   				}
+   				if (mode == 'branches'){
+   					$scope.foundPointer = $scope.foundInBranches;
+   				}else if (mode == 'repositories'){
+   					$scope.foundPointer = $scope.foundInRepositories;
+   				}
+	   			if ($scope.db[mode] != undefined){
+    		       	branchIndex = 0;
+   		    	   	branchList = $scope.db[mode];
+					$scope.processBranches();
+				}
+   			}else{// all done
+				var total  = $scope.branchComponents.length + $scope.repoComponents.length + $scope.snapshotComponents.length;
+   				setDefaultMessageOnPage('Complete, found ' + total + ' components');
+   				$scope.showProgress = false;
+   				$scope.disableAllUI = false;
+   				updaterAlive = false;
+   			}
+   		}
+   		
+   		$scope.processSnapshots = function (){
+   			progress ++;
+   			console.log('processSnapshots:'+JSON.stringify(branchList));
+   			if (branchIndex < branchList.length){
+   				var branch = branchList[branchIndex];
+   				var mode = $scope.tasks[$scope.taskNumber];
+   				var str = 'Searching in ' + mode +': '+ branch.name;
+   				updateProgressStatus(getProgressValue(progress,total),str);
+   				dataManager.getSnapshotDescription(branch.elemId).then(
+                    function (data) {
+//                    	console.log('got:'+JSON.stringify(data));
+						currentBranchComponentsLi = $scope.formCompBlocks(data.metaItems);
+						accumulativeBranchComponentsLi = [];//reset accumulators
+						accumulativeDefinitionsLi = $scope.formAttBlocks(data.attachments);
+//						console.log('got:'+JSON.stringify(accumulativeDefinitionsLi));
+						accumulativeDefinitionsMap = {};					
+						if (currentBranchComponentsLi.length > 0){
+							$scope.getMetaItems(0);
+						}else{
+							$scope.loadSnapshotAttachments(0);
+						}
+                    },
+                    function (error) {}
+                );
+   			}else{
+   				console.log('processSnapshots complete');
+   				$scope.processRequest();
+    				
+   			}
+   		}
+   		
+  		$scope.getMetaItems = function (index){
+			// from blocks from  currentBranchComponentsLi
+			if (index < currentBranchComponentsLi.length){
+				dataManager.getMetaItems(currentBranchComponentsLi[index]).then(
+                    function (data) {
+						// update accumulative buffer for current branch, get next batch
+						if (data != undefined){
+							accumulativeBranchComponentsLi = accumulativeBranchComponentsLi.concat(data);
+						}
+						$timeout(function() { 
+                    			$scope.getMetaItems(index +1);
+                    	});
+                    },
+                    function (error) {}
+                );
+			}else{
+				$scope.loadSnapshotAttachments(0);
+			}
+		}
+   		
+   		$scope.loadSnapshotAttachments = function (index){
+			if (index < accumulativeDefinitionsLi.length){
+				dataManager.getData(accumulativeDefinitionsLi[index]).then(
+                    function (data) {
+						// update accumulative buffer for current branch, get next batch
+						if (data != undefined){
+							for (var x = 0; x < data.length; x++){
+								accumulativeDefinitionsMap[data[x].Id] = data[x].base64;
+							}
+	                    	updateSubProgress('loading ', data.length);
+						}
+						$timeout(function() { 
+                    			$scope.loadSnapshotAttachments(index + 1);
+                    	});
+                    	
+                    },
+                    function (error) {}
+                );
+			}else{//complete loading of all block, process data
+				$scope.processSnapshotData();
+			}
+		}
+   		var cachedXML = {};
+   		
+   		$scope.processSnapshotData = function (){
+   			// iterate over all metaitems, form map filename => listof accosiated items
+   			var zipMap = {};
+   			for (var x = 0; x < accumulativeBranchComponentsLi.length; x++){
+   				var mi = accumulativeBranchComponentsLi[x];
+   				if (mi != undefined && mi.filename != undefined && mi.attId != undefined){
+   					if (zipMap[mi.attId] == undefined){
+   						zipMap[mi.attId] = {};// associate  a list of files with zip
+   					}
+   					var associatedMetaItems = zipMap[mi.attId];
+   					if (associatedMetaItems[mi.filename] == undefined){
+   						associatedMetaItems[mi.filename] = [];
+   					}
+   					associatedMetaItems[mi.filename].push(mi);
+   				}
+   			}
+   			//iterate over all zips, over all files, extract file to get the body, iterate over all items in list, parse xml for inner type (once), search for str, add item in match list
+   			cachedXML = {};
+   			fileMap = {};
+   			
+   			var list = Object.keys(zipMap);
+   			chainProcessSnapshots(list, zipMap);
+		}
+		
+		function chainProcessSnapshots(list, zipMap){
+			if (list.length > 0){
+				var attId = list.shift();
+   				var filesMap =  zipMap[attId];
+   				if (accumulativeDefinitionsMap[attId] != undefined){
+   					var tempSrcZip = new JSZip(accumulativeDefinitionsMap[attId], {base64:true});
+   					if (tempSrcZip != undefined && tempSrcZip.files != undefined){
+	   					updateSubProgress('processing ', mapSize(tempSrcZip.files));
+   						for (var filename in tempSrcZip.files){
+	   						var f = getNormalName(filename);
+   							if (filesMap.hasOwnProperty(f)){// process only those files which are in map filesMap
+   								if (isExcluded(getExt(filename)) ) continue;
+   								var file = tempSrcZip.file(filename).asBinary();
+   								var miList = filesMap[f];
+   								for (var x = 0; x < miList.length; x++){
+   									var mi = miList[x];
+   									var searchable;
+	   								if (mmap[mi.compType] != undefined){
+   										var key = filename + '#' + mi.compType;
+   										if (cachedXML[key] == undefined){
+   											formChildMap(mi.compType,file,filename);
+   											cachedXML[key] = true;
+   										}
+   										searchable = fileMap[mi.compType+"#"+mi.compName];
+   									}else{
+   										searchable = file;
+   									}
+	   								if (searchable == undefined || searchable == '') continue;
+	   								var searchResult = false;
+			   						if ($scope.bCaseInsensitive){
+   										if (searchable != undefined && searchable.search(searchRegExp) > -1)  searchResult = true;
+   									}else{
+   										if (searchable != undefined && searchable.indexOf($scope.searchField) > -1) searchResult = true;
+   									}
+   									if (searchResult == true){
+   										var snap = branchList[branchIndex];
+   										$scope.snapshotComponents.push({'Id':mi.compId,'compName':mi.compName,'compType':mi.compType,'snapshot':snap.name});
+   									}
+   								}
+   							}
+   						}
+	   				}
+   					delete accumulativeDefinitionsMap[attId];
+   				}
+				$timeout(function() { 
+               		chainProcessSnapshots(list, zipMap);
+                },005);
+			}else{
+	 			// close the supercycle
+				branchIndex++;
+   				// go next snapshot
+   				$scope.processSnapshots();
+			}
+		}
+		
+		function mapSize(o){
+			if (o == undefined) return 0;
+			var keys = Object.keys(o);
+			if (keys == undefined) return 0;
+			return keys.length;
+		}
+		
+		
+		function getNormalName(str){
+			var name = str;
+			if (str == undefined || str == '') return name;
+			if (str.indexOf('aura/') > -1){
+				var namesArr = str.split('/');
+				if (namesArr[1] != undefined){
+					name = 'aura/' + namesArr[1];
+				}
+			}
+//			console.log('name='+name);
+			return name; 
+		}
+		
+   		
+   		$scope.processBranches = function (){
+   			progress ++;
+   			if (branchIndex < branchList.length){
+   				var branch = branchList[branchIndex];
+   				var mode = $scope.tasks[$scope.taskNumber];
+   				var str = 'Searching in ' + mode +': '+ branch.name;
+   				updateProgressStatus(getProgressValue(progress,total),str);
+   				dataManager.getComponentDescription(branch.elemId, mode).then(
+                    function (data) {
+						currentBranchComponentsLi = $scope.formHistBlocks(data);
+						accumulativeBranchComponentsLi = [];//reset accumulator	s
+						accumulativeDefinitionsLi = [];
+						accumulativeDefinitionsMap = {};					
+						if (currentBranchComponentsLi.length > 0){
+							$scope.getDetails(0);
+						}else{
+							$scope.loadAttachments();
+						}
+                    },
+                    function (error) {}
+                );
+   			}else{
+   				console.log('processBranches complete');
+   				
+   				var totalList = $scope.count($scope.foundPointer);
+   				var blocks = $scope.formCompBlocks(totalList);
+   				$scope.loadTablesinChunks(0,blocks);
+   				
+   			}
+   		}
+   		
+   		
+   		$scope.loadTablesinChunks = function (index,blocks){
+			var mode = $scope.tasks[$scope.taskNumber];
+   			if (index < blocks.length){
+   				dataManager.getComponents(blocks[index]).then(
+                    function (data) {
+						// update accumulative buffer for current branch, get next batch
+						if (data != undefined){
+							if (mode == 'branches'){
+								$scope.branchComponents = $scope.branchComponents.concat(data);
+							}else if (mode == 'repositories'){
+								$scope.repoComponents = $scope.repoComponents.concat(data);
+							}
+						}
+						$timeout(function() { 
+                    			$scope.loadTablesinChunks(index + 1, blocks);
+                    	});
+                    },
+                    function (error) {}
+                );
+   			}else{
+   				if (mode == 'branches'){
+   					for (var x = 0; x < $scope.branchComponents.length; x++){
+   						var rec = $scope.branchComponents[x];
+   						rec.branchName = $scope.getName(rec.compId,'branch');
+   					}
+   				}else if (mode == 'repositories'){
+   					for (var x = 0; x < $scope.repoComponents.length; x++){
+   						var rec = $scope.repoComponents[x];
+   						rec.repoName = $scope.getName(rec.compId,'branch');
+   					}
+   				}
+   				$scope.processRequest();
+   			}
+   		}
+   		
+   		
+   		$scope.getName = function (id, field){
+   			var branchId = $scope.compBranchesMap[id];
+			var elem = $scope.foundPointer[branchId];
+   			if (elem != undefined){
+   				return elem[field].name;
+   			}
+   		}
+   		
+   		$scope.count = function (map){
+   			var counter = [];
+   			if (map == undefined) return counter;
+   			for (var key in map){
+   				if (map.hasOwnProperty(key)){
+   					if (map[key].ids != undefined && map[key].ids.length > 0) counter = counter.concat(map[key].ids);
+   				}
+   			}
+   			return counter;
+   		}
+   		
+		$scope.getDetails = function (index){
+			// from blocks from  currentBranchComponentsLi
+			if (index < currentBranchComponentsLi.length){
+				dataManager.getComponentDetails(currentBranchComponentsLi[index]).then(
+                    function (data) {
+						// update accumulative buffer for current branch, get next batch
+						if (data != undefined){
+							accumulativeBranchComponentsLi = accumulativeBranchComponentsLi.concat(data);
+						}
+						$timeout(function() { 
+                    			$scope.getDetails(index +1);
+                    	});
+                    },
+                    function (error) {}
+                );
+			}else{
+				$scope.loadAttachments();
+			}
+		}
+		
+		$scope.loadAttachments = function (){
+			accumulativeDefinitionsLi = $scope.formAttBlocks2(accumulativeBranchComponentsLi);// form blocks
+			$scope.loadAttachmentsInChunks(0);
+		}
+
+		$scope.loadAttachmentsInChunks = function (index){
+			if (index < accumulativeDefinitionsLi.length){
+				dataManager.getData(accumulativeDefinitionsLi[index]).then(
+                    function (data) {
+						// update accumulative buffer for current branch, get next batch
+						if (data != undefined){
+							for (var x = 0; x < data.length; x++){
+								accumulativeDefinitionsMap[data[x].Id] = data[x].base64;
+							}
+							updateSubProgress('loading ', data.length);
+						}
+						$timeout(function() { 
+                    			$scope.loadAttachmentsInChunks(index + 1);
+                    	});
+                    },
+                    function (error) {}
+                );
+			}else{//complete loading of all block, process data
+				$scope.processAllRetrievedData(accumulativeBranchComponentsLi);
+				updateSubProgress('processing ', accumulativeBranchComponentsLi.length);
+			}
+		}
+		   		
+   		$scope.processAllRetrievedData = function (branchComponentsLi){
+   			if (branchComponentsLi != undefined && branchComponentsLi.length > 0){
+   				var branch = branchList[branchIndex];
+   				var found = {};
+	   			// search all components,
+	   			if ($scope.foundPointer[branch.elemId] == undefined){
+	   				found.branch = branch;
+   					found.ids = [];
+   					$scope.foundPointer[branch.elemId] = found;
+   				}
+   				found = $scope.foundPointer[branch.elemId];
+   				var comp = branchComponentsLi.shift();
+   				if (comp != undefined && comp.historyList != undefined && comp.historyList.length > 0){
+   					for (var y = 0; y < comp.historyList.length; y++){
+   						var searchResult;
+   						var compHistId = comp.historyList[y].Id;
+   						if (accumulativeDefinitionsMap[compHistId] != undefined){
+	   						if ($scope.bCaseInsensitive){
+   								searchResult = searchStringI(accumulativeDefinitionsMap[compHistId]);
+   							}else{
+   								searchResult = searchStringS($scope.searchField, accumulativeDefinitionsMap[compHistId]);
+   							}
+   							delete accumulativeDefinitionsMap[compHistId];
+   						}
+   						if (searchResult){
+   							var parentId = comp.historyList[y].parentId;
+   							found.ids.push(parentId);
+   							$scope.compBranchesMap[parentId] = found.branch.elemId;
+   						}
+   					}
+   				}
+				$timeout(function() { 
+            		$scope.processAllRetrievedData(branchComponentsLi);
+            	});
+   			}else{
+				// close the supercycle
+				branchIndex++;
+				$timeout(function() { 
+            		$scope.processBranches();
+            	});
+            }
+   		}
+   		
+
+   		// from an array of block of max size to download from server
+   		$scope.formHistBlocks = function (compDescriptionsMap){
+   			var superBlocks = [];
+   			var block = [];
+   			var length = 0;
+   			var idCompList = [];
+   			if (compDescriptionsMap == undefined) return superBlocks;
+   			idCompList = Object.keys(compDescriptionsMap);
+   			if (idCompList.length == 0) return superBlocks;
+   			for (var x = 0; x < idCompList.length; x++){
+   				var component = idCompList[x];
+   				if (length + 48*compDescriptionsMap[component] > HIST_BLOCK_SIZE){
+   					superBlocks.push(block);
+   					block = [];
+   					length = 0;
+   				}
+   				block.push(component);
+   				length += 48*compDescriptionsMap[component];
+   			}
+   			if (length > 0){
+   				superBlocks.push(block);
+   			}
+   			return superBlocks;
+   		}
+
+   		// from an array of block of max size to download from server
+   		$scope.formCompBlocks = function (compLi){
+   			var superBlocks = [];
+   			var block = [];
+   			var counter = 0;
+   			if (compLi == undefined || compLi.length == 0) return superBlocks;
+   			for (var x = 0; x < compLi.length; x++){
+   				if (counter > COMP_BLOCK_SIZE){
+   					superBlocks.push(block);
+   					block = [];
+   					counter = 0;
+   				}
+   				block.push(compLi[x]);
+				counter ++;
+   			}
+   			if (counter > 0){
+   				superBlocks.push(block);
+   			}
+   			return superBlocks;
+   		}
+
+   		
+   		// from an array of block of max size to download from server
+   		$scope.formAttBlocks = function (attDescriptionsLi){
+   			var superBlocks = [];
+   			var block = [];
+   			var length = 0;
+   			if (attDescriptionsLi == undefined || attDescriptionsLi.length == 0) return superBlocks;
+   			for (var x = 0; x < attDescriptionsLi.length; x++){
+   				var attachment = attDescriptionsLi[x];
+   				if (length + attachment.bodyLength > BLOCK_SIZE){
+   					superBlocks.push(block);
+   					block = [];
+   					length = 0;
+   				}
+   				block.push(attachment.Id);
+   				length += attachment.bodyLength;
+   			}
+   			if (length > 0){
+   				superBlocks.push(block);
+   			}
+   			return superBlocks;
+   		}
+
+   		// from an array of block of max size to download from server
+   		$scope.formAttBlocks2 = function (componentDetailsLi){
+   			var superBlocks = [];
+   			var block = [];
+   			var length = 0;
+   			var counter = 0;
+   			if (componentDetailsLi == undefined || componentDetailsLi.length == 0) return superBlocks;
+   			for (var x = 0; x < componentDetailsLi.length; x++){
+   				var componentDetails = componentDetailsLi[x];
+   				if (componentDetails.historyList != undefined && componentDetails.historyList.length > 0){
+   					for (var y = 0; y < componentDetails.historyList.length; y++){// iterate over all history for each component
+   						var componentDetail = componentDetails.historyList[y];
+		   				if (length + componentDetail.bodyLength > BLOCK_SIZE || counter > 400){
+   							superBlocks.push(block);
+   							block = [];
+   							length = 0;
+   							counter = 0;
+   						}
+		   				block.push(componentDetail.Id);
+   						length += componentDetail.bodyLength;
+   						counter ++;
+   					}
+   				}
+   			}
+   			if (counter > 0){
+   				superBlocks.push(block);
+   			}
+   			return superBlocks;
+   		}
+
+   		
+   		// search string in zip and returns true if file contains this str
+   		function searchStringS(str,zip){
+   			if (zip == undefined) return false;
+   			var tempSrcZip = new JSZip(zip, {base64:true});
+   			if (tempSrcZip == undefined) return false;
+   			for (var fileName in tempSrcZip.files){
+   				if (isExcluded(getExt(fileName))) continue;
+   				var source = tempSrcZip.file(fileName).asBinary();
+   				if (source != undefined && source.indexOf(str) > -1){
+   					return true;
+   				}
+   			}
+   			return false;
+   		}
+
+  		// search string in zip and returns true if file contains this str
+   		function searchStringI(zip){
+   			if (zip == undefined) return false;
+   			var tempSrcZip = new JSZip(zip, {base64:true});
+   			if (tempSrcZip == undefined) return false;
+   			for (var fileName in tempSrcZip.files){
+   				if (isExcluded(getExt(fileName))) continue;
+   				var source = tempSrcZip.file(fileName).asBinary();
+   				if (source != undefined && source.search(searchRegExp) > -1){
+   					return true;
+   				}
+   			}
+   			return false;
+   		}
+   		
+   		function getExt(str){
+   			if (str == undefined || str == '') return '';
+   			var index = str.lastIndexOf('.');
+   			if (index == -1) return '';
+   			return str.substr(index + 1);
+   		}
+   		
+   		const excludedTypes = {};
+   		excludedTypes['resource'] = true; 
+   		excludedTypes['jpg'] = true; 
+   		excludedTypes['png'] = true; 
+   		excludedTypes['gif'] = true; 
+   		
+   		function isExcluded(type){
+   			return excludedTypes[type];
+   		}
+   		
+   		function getProgressValue(val,max){
+   			var value = Math.round(((val)*100)/(max + 1));
+   			return (value > 95)? 95:value;
+   			
+   		}
+    });
+    
+    function formChildMap(metaType,xml,fileName)
+	{
+			var fullName = '';
+			if(metaType != 'CustomLabel')
+			{
+				fullName = fileName.slice(fileName.indexOf("/")+1,fileName.lastIndexOf('.'))+".";
+			}
+	
+	   		var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+	   		var jsnMap ={};
+			var tempJSON = '';
+			var srcjson = x2js.xml_str2json(xml);
+			if(srcjson != undefined && srcjson != null)
+			{
+				var srcitems;
+				if(metaType == 'CustomLabel')
+				{
+					var srcMetaItem = srcjson.CustomLabels;
+					srcitems = srcMetaItem.labels;
+				}
+				else if(metaType == 'CustomField')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.fields;
+				}
+				else if(metaType == 'ListView')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.listViews;
+				}
+				else if(metaType == 'CompactLayout')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.compactLayouts;
+				}
+				else if(metaType == 'WebLink')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.webLinks;
+				}
+				else if(metaType == 'RecordType')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.recordTypes;
+				}
+				else if(metaType == 'FieldSet')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.fieldSets;
+				}
+				else if(metaType == 'ValidationRule')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.validationRules;
+				}
+				else if(metaType == 'AssignmentRule')
+				{
+					var srcMetaItem = srcjson.AssignmentRules;
+					srcitems = srcMetaItem.assignmentRule;
+				}
+				else if(metaType == 'AutoResponseRule')
+				{
+					var srcMetaItem = srcjson.AutoResponseRules;
+					srcitems = srcMetaItem.autoResponseRule;
+				}
+				else if(metaType == 'WorkflowTask')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.tasks;
+				}
+				else if(metaType == 'WorkflowOutboundMessage')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.outboundMessages;
+				}
+				else if(metaType == 'WorkflowFieldUpdate')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.fieldUpdates;
+				}
+				else if(metaType == 'WorkflowKnowledgePublish')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.knowledgePublishes;
+				}
+				else if(metaType == 'WorkflowAlert')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.alerts;
+				}
+				else if( metaType == 'WorkflowRule')
+				{
+					var srcMetaItem = srcjson.Workflow;
+					srcitems = srcMetaItem.rules;
+				}
+				else if(metaType == 'SharingCriteriaRule')
+				{
+					var srcMetaItem = srcjson.SharingRules;
+					srcitems = srcMetaItem.sharingCriteriaRules;
+				}
+				else if(metaType == 'SharingOwnerRule')
+				{
+					var srcMetaItem = srcjson.SharingRules;
+					srcitems = srcMetaItem.sharingOwnerRules;
+				}
+				else if(metaType == 'BusinessProcess')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.businessProcesses;
+				}
+				else if(metaType == 'SharingReason')
+				{
+					var srcMetaItem = srcjson.CustomObject;
+					srcitems = srcMetaItem.sharingReasons;
+				}
+				else if(metaType == 'EscalationRule')
+				{
+					var srcMetaItem = srcjson.EscalationRules;
+					srcitems = srcMetaItem.escalationRule;
+				}
+				else if(metaType == 'MatchingRule')    
+				{
+					var srcMetaItem = srcjson.MatchingRules;
+					srcitems = srcMetaItem.matchingRules;
+				}
+				else if(metaType == 'ManagedTopic')
+				{
+					var srcMetaItem = srcjson.ManagedTopics;
+					srcitems = srcMetaItem.ManagedTopic;
+				}
+				if(srcitems != undefined)
+				{
+					if(srcitems.fullName == undefined)
+				    {	
+				    	for(var i in srcitems)	
+				    	{
+				    		if(i < srcitems.length)
+				    		{
+				    			var v = srcitems[i];
+				    			jsnMap[v.fullName]= JSON.stringify(v);
+				    		}
+				    	}	    	 
+				    }
+				    else
+				    {
+					    jsnMap[srcitems.fullName] = JSON.stringify(srcitems);
+				    }
+			    }
+			}
+			for(var name in jsnMap)
+			{
+				var tempXml = '';
+				var tempJSON = jsnMap[name];
+				if(tempJSON != undefined)
+				{
+					//header
+					if(metaType == 'CustomLabel')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'AssignmentRule' )
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><AssignmentRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><AutoResponseRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule' || metaType == 'WorkflowKnowledgePublish')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><SharingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><EscalationRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><MatchingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><ManagedTopics xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					else
+					{
+						tempXml = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+					}
+					
+					//body
+					if(metaType == 'CustomLabel')
+					{
+						tempXml = tempXml +'<labels>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</labels>';
+					}
+					else if(metaType == 'CustomField')
+					{
+						tempXml = tempXml +'<fields>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</fields>';
+					}
+					else if(metaType == 'ListView')
+					{
+						tempXml = tempXml +'<listViews>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</listViews>';
+					}
+					else if(metaType == 'CompactLayout')
+					{
+						tempXml = tempXml +'<compactLayouts>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</compactLayouts>';
+					}
+					else if(metaType == 'WebLink')
+					{
+						tempXml = tempXml +'<webLinks>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</webLinks>';
+					}
+					else if(metaType == 'RecordType')
+					{
+						tempXml = tempXml +'<recordTypes>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</recordTypes>';
+					}
+					else if(metaType == 'FieldSet')
+					{
+						tempXml = tempXml +'<fieldSets>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</fieldSets>';
+					}
+					else if(metaType == 'ValidationRule')
+					{
+						tempXml = tempXml +'<validationRules>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</validationRules>';
+					}
+					else if(metaType == 'AssignmentRule')
+					{
+						tempXml = tempXml +'<assignmentRule>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</assignmentRule>';
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						tempXml = tempXml +'<autoResponseRule>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</autoResponseRule>';
+					}
+					else if(metaType == 'WorkflowAlert')
+					{
+						tempXml = tempXml +'<alerts>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</alerts>';
+					}
+					else if(metaType == 'WorkflowFieldUpdate')
+					{
+						tempXml = tempXml +'<fieldUpdates>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</fieldUpdates>';
+					}
+					else if(metaType == 'WorkflowKnowledgePublish')
+					{
+						tempXml = tempXml +'<knowledgePublishes>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</knowledgePublishes>';
+					}
+					else if(metaType == 'WorkflowOutboundMessage')
+					{
+						tempXml = tempXml +'<outboundMessages>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</outboundMessages>';
+					}
+					else if(metaType == 'WorkflowTask')
+					{
+						tempXml = tempXml +'<tasks>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</tasks>';
+					}
+					else if(metaType == 'WorkflowRule')
+					{
+						tempXml = tempXml +'<rules>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</rules>';
+					}
+					else if(metaType == 'SharingCriteriaRule')
+					{
+						tempXml = tempXml +'<sharingCriteriaRules>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</sharingCriteriaRules>';
+					}
+					else if(metaType == 'SharingOwnerRule')
+					{
+						tempXml = tempXml +'<sharingOwnerRules>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</sharingOwnerRules>';
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						tempXml = tempXml +'<escalationRule>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</escalationRule>';
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						tempXml = tempXml +'<matchingRules>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</matchingRules>';
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						tempXml = tempXml +'<managedTopic>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</managedTopic>';
+					}
+					else if(metaType == 'BusinessProcess')
+					{
+						tempXml = tempXml +'<businessProcesses>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</businessProcesses>';
+					}
+					else if(metaType == 'SharingReason')
+					{
+						tempXml = tempXml +'<sharingReasons>'+x2js.json2xml_str($j.parseJSON(tempJSON))+'</sharingReasons>';
+					}
+					
+					
+					//footer
+					if(metaType == 'CustomLabel')
+					{
+						tempXml = tempXml +'</CustomLabels>';
+					}
+					else if(metaType == 'AssignmentRule' )
+					{
+						tempXml = tempXml +'</AssignmentRules>';
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						tempXml = tempXml +'</AutoResponseRules>';
+					}
+					else if(metaType == 'WorkflowAlert' || metaType == 'WorkflowFieldUpdate'|| metaType == 'WorkflowOutboundMessage'|| metaType == 'WorkflowTask' || metaType == 'WorkflowRule' || metaType == 'WorkflowKnowledgePublish')
+					{
+						tempXml = tempXml +'</Workflow>';
+					}
+					else if(metaType == 'SharingCriteriaRule' || metaType == 'SharingOwnerRule')
+					{
+						tempXml = tempXml +'</SharingRules>';
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						tempXml = tempXml +'</EscalationRules>';
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						tempXml = tempXml +'</MatchingRules>';
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						tempXml = tempXml +'</ManagedTopics>';
+					}
+					else
+					{
+						tempXml = tempXml +'</CustomObject>';
+					}
+					fileMap[metaType+"#"+fullName+""+name]=	tempXml;
+				}
+			}
+   }
+    
+    
+   </script>
+
+</apex:page>

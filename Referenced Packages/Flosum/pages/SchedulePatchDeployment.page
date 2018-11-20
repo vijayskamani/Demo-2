@@ -1,0 +1,2082 @@
+<apex:page standardController="Flosum__Patch__c" extensions="Flosum.SchedulePatchDeploymentExtension" sidebar="false">
+    <c:TrackPanel />
+    <apex:includeScript value="{!URLFOR($Resource.Flosum__jszipmaster, 'jszip-master/dist/jszip.js')}"/>
+    <script src="{!$Resource.xmltojson}"></script>
+    <script src="{!$Resource.X2JS}"></script>
+    <script type="text/javascript" async="" src="{!URLFOR($Resource.zipp,'res/ga.js')}"></script>
+	<script type="text/javascript" src="{!URLFOR($Resource.zipp,'res/js/zip.js')}"></script>
+    <c:Wait />
+    <apex:form id="formid">
+        <apex:actionfunction action="{!saveAttachment}" name="saveAttachments" reRender="msg" onComplete="startScheduleSnapshot();">
+            <apex:param assignTo="{!base64AttBody}" value="" name="newstr"/>
+        </apex:actionfunction>
+        <apex:actionfunction action="{!createLogRecord}" name="createLogRecord" reRender="msg" onComplete="saveAttachmentToPatch({!IsValid});"/>
+        <apex:actionfunction action="{!scheduleDeploymentBatch}" name="scheduleDeployment" reRender="msg" onComplete="enableBoth();"/>
+        <apex:pagemessages id="msg"/>
+        <apex:pageblock Title="Schedule Deployment" id="block" rendered="{!AND(patchId != null,patchId != '')}">
+            <apex:pageBlockButtons >
+                <apex:commandButton value="Schedule Deployment" action="{!validateScheduleDeployment}" rendered="{!IF(authSuccesfull,true,false)}" onClick="disableBoth();" onComplete="getPatchDetail({!isScheduleApprove},{!IsValid},'{!patchId}');" reRender="msg" styleClass="disableitem"/>
+            </apex:pageBlockButtons>
+            <apex:pageBlockSection columns="1">
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Patch Name" />
+                    <apex:outputLabel value="{!patchName}" />
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="Target Org" />
+                    <apex:selectList size="1" value="{!selectedOrg}" styleClass="disableitem">
+                        <apex:selectOptions value="{!targetOrgOptions}"/>
+                        <apex:actionSupport event="onchange"  action="{!validateOrg}" rerender="msg,block" onsubmit="show();" oncomplete="hide();"/>
+                    </apex:selectList>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!IF(authSuccesfull,true,false)}">
+                    <apex:outputLabel value="Date & Time of Deployment" />
+                    <apex:inputField value="{!comp.Flosum__Last_Modified_Date__c}" styleClass="disableitem"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem rendered="{!IF(authSuccesfull,true,false)}">
+		        	<apex:outputLabel value="Run Test" />
+					<apex:selectList size="1" value="{!selectedRunTest}" styleClass="disableitem">
+		                <apex:selectOptions value="{!runTestOption}"/>
+		                <apex:actionSupport event="onchange" action="{!showNoteMessage}" rerender="msg,block" onsubmit="show();" oncomplete="hide();"/>
+		            </apex:selectList>
+		        </apex:pageBlockSectionItem>
+		        <apex:pageBlockSectionItem rendered="{!IF(authSuccesfull && selectedRunTest == 'RunSpecifiedTests',true,false)}">
+		        	<apex:outputPanel ></apex:outputPanel>
+		        	<apex:inputTextarea value="{!specifiedClasses}" id="specifiedTests" rows="5" cols="47" styleClass="disableitem"/>
+		        </apex:pageBlockSectionItem>
+		        <apex:pageBlockSectionItem >
+                    <apex:outputLabel value="{!$Label.flosum__intelegent_profile_deployment_label}" />
+                    <apex:inputCheckbox value="{!ValidProfile}" styleClass="ValidProfile disableitem"/>
+                </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+        </apex:pageblock>
+        <apex:actionfunction action="{!showMessage}" reRender="msg" name="showMessage" onComplete="hide();enableBoth();">
+            <apex:param assignTo="{!message}" value="" name="newstr"/>
+        </apex:actionfunction>
+    </apex:form>
+    <script>
+		zip.workerScriptsPath = "{!URLFOR($Resource.zipp,'res/js/workers')}/";
+        var zipFileEntry, zipWriter, writer, creationMethod, URL = window.webkitURL || window.mozURL || window.URL;
+        var apiVersion = {!localApiVersion};
+	
+		var deployPatchId;
+		var limitofZip = 6000000;
+
+    	var patchAttachmentList = [];
+    	var ValidName = {'ApexClass': [], 
+							'CustomObject': [], 
+							'ApexPage':[], 
+							'CustomTab': [],
+							'Layout': [],
+							'CustomApplication':[],
+							'ExternalDataSource':[],
+							'CustomPermission':[],
+							'CustomField':[],
+							'RecordType':[]
+						};
+						
+		Visualforce.remoting.timeout = 120000;
+		var attachmentMap = {};
+		var attList = [];
+		var patchDataMap = {};
+		var patchItems = [];
+		var ZipfilesMap= {};
+		var ZipfilesList = [];
+		var preDestructiveManifest = '';
+    	var postDestructiveManifest = '';
+    	var packageXml = '';
+    	var patchBase64Str = '';
+    	
+    	var attIdsCount = 0;
+    	
+    	var IsrollbackOnError = true;
+    	var xmlname= 'package.xml';
+    	
+    	var parentMap = {};
+    	parentMap['Workflow'] = 'Workflow';
+    	parentMap['CustomObject'] = 'CustomObject';
+    	parentMap['CustomLabels'] = 'CustomLabels';
+    	parentMap['AssignmentRules'] = 'AssignmentRules';
+    	parentMap['AutoResponseRules'] = 'AutoResponseRules';
+    	parentMap['MatchingRules'] = 'MatchingRules';
+    	parentMap['ManagedTopics'] = 'ManagedTopics';
+    	parentMap['EscalationRules'] = 'EscalationRules';
+    	parentMap['Package-xml'] = 'Package-xml';
+    	
+    	var bundleTypes = {};
+    	bundleTypes['AuraDefinitionBundle'] = 'AuraDefinitionBundle';
+		
+		var mmap = new Object();
+	    mmap['CustomField'] = true;
+	    mmap['CustomLabel'] = true;
+	    mmap['CompactLayout'] = true;
+	    mmap['WebLink'] = true;
+	    mmap['RecordType'] = true;
+	    mmap['ListView'] = true;
+	    mmap['FieldSet'] = true;
+	    mmap['AssignmentRule'] = true;
+	    mmap['AutoResponseRule'] = true;
+	    mmap['ValidationRule'] = true;
+	    mmap['WorkflowTask'] = true;
+		mmap['WorkflowOutboundMessage'] = true;
+		mmap['WorkflowFieldUpdate'] = true;
+		mmap['WorkflowKnowledgePublish'] = true;
+		mmap['WorkflowAlert'] = true;
+		mmap['WorkflowRule'] = true;
+		
+		mmap['SharingOwnerRule'] = true;
+		mmap['SharingCriteriaRule'] = true;
+		mmap['BusinessProcess'] = true;
+		mmap['SharingReason'] = true;
+		mmap['EscalationRule'] = true;
+		mmap['MatchingRule'] = true;
+		mmap['ManagedTopic'] = true;
+		
+		var folderMap = {};
+		folderMap['DocumentFolder'] = 'Document';
+		folderMap['DashboardFolder'] = 'Dashboard';
+		folderMap['ReportFolder'] = 'Report';
+		folderMap['EmailFolder'] = 'EmailTemplate';
+		
+		
+		var metadataTypeHeaderMap = {};
+		metadataTypeHeaderMap['CustomLabel'] = '<?xml version="1.0" encoding="UTF-8"?><CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['CustomField'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['CompactLayout'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['WebLink'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['RecordType'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['ListView'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['FieldSet'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['BusinessProcess'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['SharingReason'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['ValidationRule'] = '<?xml version="1.0" encoding="UTF-8"?><CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['AssignmentRule'] = '<?xml version="1.0" encoding="UTF-8"?><AssignmentRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['AutoResponseRule'] = '<?xml version="1.0" encoding="UTF-8"?><AutoResponseRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+	    metadataTypeHeaderMap['WorkflowTask'] = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['WorkflowOutboundMessage'] = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['WorkflowFieldUpdate'] = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['WorkflowKnowledgePublish'] = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['WorkflowAlert'] = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['WorkflowRule'] = '<?xml version="1.0" encoding="UTF-8"?><Workflow xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['SharingOwnerRule'] = '<?xml version="1.0" encoding="UTF-8"?><SharingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['SharingCriteriaRule'] = '<?xml version="1.0" encoding="UTF-8"?><SharingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['EscalationRule'] = '<?xml version="1.0" encoding="UTF-8"?><EscalationRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['MatchingRule'] = '<?xml version="1.0" encoding="UTF-8"?><MatchingRules xmlns="http://soap.sforce.com/2006/04/metadata">';
+		metadataTypeHeaderMap['ManagedTopic'] = '<?xml version="1.0" encoding="UTF-8"?><ManagedTopics xmlns="http://soap.sforce.com/2006/04/metadata">';
+		
+		var metadataTypeFooterMap = {};
+		metadataTypeFooterMap['CustomLabel'] = '</CustomLabels>';
+		metadataTypeFooterMap['CustomField'] = '</CustomObject>';
+	    metadataTypeFooterMap['CompactLayout'] = '</CustomObject>';
+	    metadataTypeFooterMap['WebLink'] = '</CustomObject>';
+	    metadataTypeFooterMap['RecordType'] = '</CustomObject>';
+	    metadataTypeFooterMap['ListView'] = '</CustomObject>';
+	    metadataTypeFooterMap['FieldSet'] = '</CustomObject>';
+	    metadataTypeFooterMap['BusinessProcess'] = '</CustomObject>';
+		metadataTypeFooterMap['SharingReason'] = '</CustomObject>';
+	    metadataTypeFooterMap['ValidationRule'] = '</CustomObject>';
+	    metadataTypeFooterMap['AssignmentRule'] = '</AssignmentRules>';
+	    metadataTypeFooterMap['AutoResponseRule'] = '</AutoResponseRules>';
+	    metadataTypeFooterMap['WorkflowTask'] = '</Workflow>';
+		metadataTypeFooterMap['WorkflowOutboundMessage'] = '</Workflow>';
+		metadataTypeFooterMap['WorkflowFieldUpdate'] = '</Workflow>';
+		metadataTypeFooterMap['WorkflowKnowledgePublish'] = '</Workflow>';
+		metadataTypeFooterMap['WorkflowAlert'] = '</Workflow>';
+		metadataTypeFooterMap['WorkflowRule'] = '</Workflow>';
+		metadataTypeFooterMap['SharingOwnerRule'] = '</SharingRules>';
+		metadataTypeFooterMap['SharingCriteriaRule'] = '</SharingRules>';
+		metadataTypeFooterMap['EscalationRule'] = '</EscalationRules>';
+		metadataTypeFooterMap['MatchingRule'] = '</MatchingRules>';
+		metadataTypeFooterMap['ManagedTopic'] = '</ManagedTopics>';
+		
+		var metadataTypePreTagMap = {};
+		metadataTypePreTagMap['CustomLabel'] = '<labels>';
+		metadataTypePreTagMap['CustomField'] = '<fields>';
+	    metadataTypePreTagMap['CompactLayout'] = '<compactLayouts>';
+	    metadataTypePreTagMap['WebLink'] = '<webLinks>';
+	    metadataTypePreTagMap['RecordType'] = '<recordTypes>';
+	    metadataTypePreTagMap['ListView'] = '<listViews>';
+	    metadataTypePreTagMap['FieldSet'] = '<fieldSets>';
+	    metadataTypePreTagMap['BusinessProcess'] = '<businessProcesses>';
+		metadataTypePreTagMap['SharingReason'] = '<sharingReasons>';
+	    metadataTypePreTagMap['ValidationRule'] = '<validationRules>';
+	    metadataTypePreTagMap['AssignmentRule'] = '<assignmentRule>';
+	    metadataTypePreTagMap['AutoResponseRule'] = '<autoResponseRule>';
+	    metadataTypePreTagMap['WorkflowTask'] = '<tasks>';
+		metadataTypePreTagMap['WorkflowOutboundMessage'] = '<outboundMessages>';
+		metadataTypePreTagMap['WorkflowFieldUpdate'] = '<fieldUpdates>';
+		metadataTypePreTagMap['WorkflowKnowledgePublish'] = '<knowledgePublishes>';
+		metadataTypePreTagMap['WorkflowAlert'] = '<alerts>';
+		metadataTypePreTagMap['WorkflowRule'] = '<rules>';
+		metadataTypePreTagMap['SharingOwnerRule'] = '<sharingOwnerRules>';
+		metadataTypePreTagMap['SharingCriteriaRule'] = '<sharingCriteriaRules>';
+		metadataTypePreTagMap['EscalationRule'] = '<escalationRule>';
+		metadataTypePreTagMap['MatchingRule'] = '<matchingRules>';
+		metadataTypePreTagMap['ManagedTopic'] = '<managedTopic>';
+		
+		var metadataTypePostTagMap = {};
+		metadataTypePostTagMap['CustomLabel'] = '</labels>';
+		metadataTypePostTagMap['CustomField'] = '</fields>';
+	    metadataTypePostTagMap['CompactLayout'] = '</compactLayouts>';
+	    metadataTypePostTagMap['WebLink'] = '</webLinks>';
+	    metadataTypePostTagMap['RecordType'] = '</recordTypes>';
+	    metadataTypePostTagMap['ListView'] = '</listViews>';
+	    metadataTypePostTagMap['FieldSet'] = '</fieldSets>';
+	    metadataTypePostTagMap['BusinessProcess'] = '</businessProcesses>';
+		metadataTypePostTagMap['SharingReason'] = '</sharingReasons>';
+	    metadataTypePostTagMap['ValidationRule'] = '</validationRules>';
+	    metadataTypePostTagMap['AssignmentRule'] = '</assignmentRule>';
+	    metadataTypePostTagMap['AutoResponseRule'] = '</autoResponseRule>';
+	    metadataTypePostTagMap['WorkflowTask'] = '</tasks>';
+		metadataTypePostTagMap['WorkflowOutboundMessage'] = '</outboundMessages>';
+		metadataTypePostTagMap['WorkflowFieldUpdate'] = '</fieldUpdates>';
+		metadataTypePostTagMap['WorkflowKnowledgePublish'] = '</knowledgePublishes>';
+		metadataTypePostTagMap['WorkflowAlert'] = '</alerts>';
+		metadataTypePostTagMap['WorkflowRule'] = '</rules>';
+		metadataTypePostTagMap['SharingOwnerRule'] = '</sharingOwnerRules>';
+		metadataTypePostTagMap['SharingCriteriaRule'] = '</sharingCriteriaRules>';
+		metadataTypePostTagMap['EscalationRule'] = '</escalationRule>';
+		metadataTypePostTagMap['MatchingRule'] = '</matchingRules>';
+		metadataTypePostTagMap['ManagedTopic'] = '</managedTopic>';
+		
+		function getPatchDetail(isScheduleApprove,IsValid,patchId)
+        {
+        	if(isScheduleApprove)
+        	{
+	            attachmentMap = {};
+	            patchDataMap = {};
+	            attList = [];
+	            patchItems = [];
+	            preDestructiveManifest = '';
+	            postDestructiveManifest = '';
+	            packageXml = '';
+	            patchList = {};
+	            attSaveIndex = 0;
+	            
+	            deploymentPatchId = patchId;
+	            if(IsValid && patchId != undefined && patchId.length == 18)
+	            {
+	                Visualforce.remoting.Manager.invokeAction(
+	                                    '{!$RemoteAction.SchedulePatchDeploymentExtension.getPatchData}',
+	                                    patchId,
+	                                    handlePatchDetail   
+	                                );
+	            }
+	            else
+	                enableBoth();
+        	}
+        	else
+                enableBoth();
+        }
+        
+		function getPatchDetail(IsSuccessfull, IsValid, patchId)
+		{
+			if(IsSuccessfull)
+            {
+				setDefaultMessageOnPage('Do not close the window since the deployment is in progress. Closing this window may stop the deployment.');
+				attIdsCount = 0;
+				IsrollbackOnError = true;
+				patchAttachmentList = [];
+				attachmentMap = {};
+				patchDataMap = {};
+				ZipfilesMap = {};
+				ZipfilesList = [];
+				attList = [];
+				patchItems = [];
+				preDestructiveManifest = '';
+		    	postDestructiveManifest = '';
+		    	packageXml = '';
+		    	patchBase64Str = '';
+			
+				deployPatchId = patchId;
+			
+				console.log('IsrollbackOnError---'+IsrollbackOnError);
+				if(IsValid && patchId != undefined && patchId.length == 18)
+				{
+					bindWindow();
+					Visualforce.remoting.Manager.invokeAction(
+							            '{!$RemoteAction.SchedulePatchDeploymentExtension.getPatchData}',
+							            patchId,
+							            handlePatchDetail   
+							        );
+				}
+				else
+					enableBoth();
+			}
+			else
+				enableBoth();
+		}
+		
+		function handlePatchDetail(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	preDestructiveManifest = destructiveXmlCreator(r.destructiveInfo.preMap);
+		    	postDestructiveManifest = destructiveXmlCreator(r.destructiveInfo.postMap);
+		    	packageXml = packageXmlCreator(r.MetaItemlist);
+		    	if(r.MetaItemlist.length > 0 || preDestructiveManifest != '' || postDestructiveManifest != '')
+		    	{
+		    		patchItems = r.MetaItemlist;
+		    		createValidDATA();
+		    		for(var index in r.MetaItemlist)
+					{
+						if(index < r.MetaItemlist.length)
+						{
+							var metaItems = r.MetaItemlist[index];
+							var packageXmlLi = metaItems.items;
+							for(var index2 in packageXmlLi)
+							{
+								if(index2 < packageXmlLi.length)
+								{
+									var attIds = packageXmlLi[index2].attachmentIds;
+									for(var index3 in attIds)
+									{
+										if(index3 < attIds.length)
+										{
+											attachmentMap[attIds[index3]] = attIds[index3];
+										}
+									}
+								}
+							}
+						}
+					}
+					getAttachmentsDetail();
+		    	}
+		    	else
+		    	{
+		    		showMessage('There should be at least one item in manifest or destructive changes related list.');
+		    	}
+		    }
+		    else
+		    {
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function getAttachmentsDetail()
+		{
+			attIdsCount = mapCounter(attachmentMap);
+			Visualforce.remoting.Manager.invokeAction(
+						            '{!$RemoteAction.SchedulePatchDeploymentExtension.getAttachmentsDetail}',
+						            JSON.stringify(attachmentMap),
+						            handleAttachmentDetail   
+						        );
+		}
+		
+		function handleAttachmentDetail(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	if(attIdsCount != r.length)
+		    	{
+		    		showMessage('The components in the patch refer to another object (such as Snapshots, Branches or Repository) which contain the definition of the components. The definition of some of these components may have been deleted.');
+		    		return;
+		    	}
+		    	if(r.length > 0)
+				{
+					attList = [];
+					var bodySize = 0;
+					var temp = [];
+					for(var i in r)
+					{
+						if(i< r.length)
+						{
+							var att = r[i];
+							if((bodySize +att.BodyLength) > 3000000 && temp.length > 0) 
+							{
+								attList.push(temp);
+								bodySize = 0;
+								temp = [];
+							}
+							temp.push(att.Id);
+							bodySize = bodySize+att.BodyLength;
+						}
+					}
+					if(temp.length > 0)
+					{
+						attList.push(temp);
+					}
+				}
+				if(attList.length > 0)
+				{
+					//attachment found.
+					getAttachments();
+				}
+				else
+				{
+					//showMessage('No attachment found.');
+					zipFiles();
+				}
+		    }
+		    else
+		    {
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function getAttachments()
+		{
+			if(attList.length > 0)
+			{
+				var attLi = attList[0];
+				Visualforce.remoting.Manager.invokeAction(
+						            '{!$RemoteAction.SchedulePatchDeploymentExtension.getAttachments}',
+						            JSON.stringify(attLi),
+						            deployPatchId,
+						            handleGetAttachments   
+						        );
+				attList.shift();
+			}
+		}
+		
+		function handleGetAttachments(r,e)
+		{
+			if(e.status && r) 
+		    {
+		    	if(r.length > 0)
+		    	{
+		    		var attReadIndex = 0;
+		    		var readFullAtt = function(){
+		    			if(attReadIndex < r.length)
+		    			{
+		    				var att = r[attReadIndex];
+							var parentId = att.parentId;
+				    		var metaType = att.compType;
+				    		var base64str = att.base64;
+				    		// use a Data64URIReader to read the zip from a base64 string
+							zip.createReader(new zip.Data64URIReader(base64str), function(reader) {
+								var EntryIndex = 0;
+								// get all entries from the zip
+								reader.getEntries(function(entries) {
+									if(entries.length)
+									{
+										var readSingleFile = function(){
+											    if (EntryIndex < entries.length) 
+											    {
+											    	var singleEntry = entries[EntryIndex];
+											    	var fileName = singleEntry.filename;
+											    	if(metaType == 'Profile')
+													{
+														entries[EntryIndex].getData(new zip.TextWriter(), function(fileData) {
+															if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0) && fileName != 'package.xml') 
+											            	{
+											            		var keyFileName = parentId+'#'+metaType+'#'+fileName;
+																
+																if(fileData != undefined)
+																{
+																	if ($(".ValidProfile").is(':checked')) {
+							                                        	fileData = validationProfileAndPermissionSet(fileData);
+							                                        }
+							                                        patchDataMap[keyFileName] = fileData;
+																}
+															}
+															EntryIndex++;
+															readSingleFile();
+														});
+													}
+													else if(parentMap[metaType] != undefined)
+													{
+														entries[EntryIndex].getData(new zip.TextWriter(), function(text) {
+															if(fileName != undefined && fileName != 'package.xml')
+													        {
+													        	patchDataMap[parentId+'#'+metaType+'#'+fileName] = text;
+															}
+															EntryIndex++;
+															readSingleFile();
+														});
+													}
+													else if(mmap[metaType] == undefined)
+													{
+														entries[EntryIndex].getData(new zip.BlobWriter(), function(blobData) {
+													        if(fileName != undefined && fileName != 'package.xml')
+													        {
+													        	patchDataMap[parentId+'#'+metaType+'#'+fileName] = blobData;
+													        }
+															EntryIndex++;
+															readSingleFile();
+												    	});
+													}
+													else
+													{
+														
+														entries[EntryIndex].getData(new zip.TextWriter(), function(text) {
+															if(fileName != undefined && fileName != 'package.xml')
+													        {
+													        	childSplitter(text,metaType,parentId,fileName);
+															}
+															EntryIndex++;
+															readSingleFile();
+														});
+													}
+										    	}
+										    	else
+										    	{
+										    		// close the zip reader
+											        reader.close(function() {
+											          // onclose callback
+											          	attReadIndex++;
+											        	readFullAtt();
+											        });
+										    	}
+									    	}
+									    	readSingleFile();
+									}
+									else
+									{
+										console.log('!entries.length');
+									}
+								});
+							}, function(error) {
+								  // onerror callback
+								  console.log('Error in reading file from attachments.');
+								  console.log(error);
+								  console.log(JSON.stringify(error));
+									if(error.message != undefined)
+									{
+										showMessage(error.message);
+									}
+									else
+									{
+										showMessage('Unknown error.');
+									}
+							});
+		    			}
+		    			else
+		    			{
+		    				if(attList.length > 0)
+							{
+								//attachment found.
+								getAttachments();
+							}
+							else
+							{
+								//all attachment collected succesfully.
+								fileListCreator();
+							}
+		    			}
+		    		}
+		    		readFullAtt();
+		    	}
+		    	else if(attList.length > 0)
+				{
+					//attachment found.
+					getAttachments();
+				}
+				else
+				{
+					//all attachment collected succesfully.
+					fileListCreator();
+				}
+			}
+		    else
+		    {
+		    	showMessage(e.message);
+		    }
+		}
+		
+		function fileListCreator()
+		{
+			if(patchItems.length > 0 || preDestructiveManifest != '' || postDestructiveManifest != '')
+			{
+				var patchTypeIndex = 0;
+				while(patchTypeIndex < patchItems.length)
+			    {
+				    	var metaTypeitemDetail = patchItems[patchTypeIndex];
+	    				var componentType = metaTypeitemDetail.metaType;
+	    				var metaTypeitems = metaTypeitemDetail.items;
+	    				
+	    				addSingleTypeItems(metaTypeitemDetail,componentType,metaTypeitems);
+	    				patchTypeIndex++;
+			    }
+				childXMLJoinAll(); 
+			    zipFiles();
+			}
+			else
+			{
+				showMessage('No zip files found.');
+			}
+		}
+		
+		
+		function addSingleTypeItems(metaTypeitemDetail,componentType,metaTypeitems)
+		{
+  				var patchItemIndex = 0;
+   				while(patchItemIndex < metaTypeitems.length)
+				{
+					//collect file
+					var item = metaTypeitems[patchItemIndex];
+   					var fileName = item.fileName;
+	    			var fullName = item.itemName;
+	    			var parentId = item.snapId;
+	    			var fileData = undefined;
+	    			var compKey = parentId+'#'+componentType+'#'+fileName;
+	    			if(mmap[componentType] == undefined)
+					{
+						if(folderMap[componentType] != undefined)
+		    			{
+		    				compKey = parentId+'#'+folderMap[componentType]+'#'+fileName;
+		    			}
+						if(patchDataMap[compKey] != undefined)
+						{
+							fileData = patchDataMap[compKey];
+						}
+						else
+						{
+							if(bundleTypes[componentType] != undefined)
+							{
+								for(var key in patchDataMap)
+								{
+									if(key != undefined && key.indexOf(compKey+'/') == 0)
+									{
+										var fName = key.replace(parentId+'#'+componentType+'#','');
+										var fileInfo = new Object();
+										fileInfo.name = fName;
+										fileInfo.data = patchDataMap[key];
+										fileInfo.type = componentType;
+										ZipfilesMap[fName]= fileInfo;
+									}
+								}
+							}
+							else
+								console.log('component not found.'+componentType+'----'+fullName);
+						}
+					}
+					else
+					{
+						compKey = parentId+'#'+componentType+'#'+fullName;
+						if(patchDataMap[compKey] != undefined)
+						{
+							if(ZipfilesMap[fileName] != undefined)
+							{
+								var fileInfo = ZipfilesMap[fileName];
+								var zipData = fileInfo.data;
+								var newData = patchDataMap[compKey];
+								childXMLJoin(newData,componentType,fullName,fileName);
+							}
+							else
+							{
+								fileData = patchDataMap[compKey];
+							}
+						}
+						else
+						{
+							console.log('component not found.'+componentType+'----'+fullName);
+						}
+					}
+	
+					if(fileData != undefined)
+					{
+						var fileInfo = new Object();
+						fileInfo.name = fileName;
+						fileInfo.data = fileData;
+						fileInfo.type = componentType;
+						ZipfilesMap[fileName]= fileInfo;
+						var metaXmlKey = compKey+'-meta.xml';
+						if(patchDataMap[metaXmlKey] != undefined)
+						{
+							var metaXmlFileName = fileName+'-meta.xml';
+							var xmlData = patchDataMap[metaXmlKey];
+									
+							var xmlfileInfo = new Object();
+							xmlfileInfo.name = metaXmlFileName;
+							xmlfileInfo.data = xmlData;
+							xmlfileInfo.type = componentType;
+							ZipfilesMap[metaXmlFileName]= xmlfileInfo;
+						}
+					}
+					patchItemIndex++;
+				}
+			
+		}
+		
+		
+		function zipFiles()
+		{
+			console.log('creating zip files');
+			for(var key in ZipfilesMap)
+			{
+				ZipfilesList.push(ZipfilesMap[key]);
+			}
+			if(packageXml != undefined && packageXml != '')
+			{
+				var xmlfileInfo = new Object();
+				xmlfileInfo.name = 'package.xml';
+				xmlfileInfo.data = packageXml;
+				xmlfileInfo.type = 'Package-xml';
+				ZipfilesList.push(xmlfileInfo);
+			}
+			if(preDestructiveManifest != '')
+			{
+				var xmlfileInfo = new Object();
+				xmlfileInfo.name = 'destructiveChangesPre.xml';
+				xmlfileInfo.data = preDestructiveManifest;
+				xmlfileInfo.type = 'Package-xml';
+				ZipfilesList.push(xmlfileInfo);
+			}
+			if(postDestructiveManifest != '')
+			{
+				var xmlfileInfo = new Object();
+				xmlfileInfo.name = 'destructiveChangesPost.xml';
+				xmlfileInfo.data = postDestructiveManifest;
+				xmlfileInfo.type = 'Package-xml';
+				ZipfilesList.push(xmlfileInfo);
+			}
+			if(ZipfilesList.length > 0)
+			{
+				console.log('creating zip files:'+ZipfilesList.length);
+				deploymentZipFileCreator(ZipfilesList);
+			}
+			else
+			{
+				showMessage('There should be at least one item in manifest or destructive changes related list.');
+			}
+		}
+		
+		function deploymentZipFileCreator(files) {
+			var addIndex = 0;
+			var tempWriter;
+			function nextFile() 
+			{
+				var file = files[addIndex];
+				if(file.type == 'Profile' || file.type == 'PermissionSet' || mmap[file.type] != undefined || parentMap[file.type] != undefined)
+				{
+						tempWriter.add(file.name, new zip.TextReader(file.data), function() {
+						addIndex++;
+						if (addIndex < files.length)
+							nextFile();
+						else
+						{
+							tempWriter.close(function(base64Data) {
+			    					base64Data = base64Data.slice(base64Data.indexOf(';base64,') + 8);
+			    					patchBase64Str = base64Data;
+			    					createLogRecord();
+			    				});
+						}
+					});
+				}
+				else
+				{
+						tempWriter.add(file.name, new zip.BlobReader(file.data), function() {
+						addIndex++;
+						if(addIndex < files.length)
+							nextFile();
+						else
+						{
+							tempWriter.close(function(base64Data) {
+			    					base64Data = base64Data.slice(base64Data.indexOf(';base64,') + 8);
+			    					patchBase64Str = base64Data;
+			    					createLogRecord();
+			    				});
+						}
+					});
+				}
+			}
+
+			function createZipWriter() {
+                  zip.createWriter(new zip.Data64URIWriter(), function(writer2) {
+					tempWriter = writer2;
+					nextFile();
+				}, function(error) {
+					// onerror callback
+					console.log('Error while creating single zip.');
+					console.log(error);
+					console.log(JSON.stringify(error));
+					if(error.message != undefined)
+					{
+						showMessage(error.message);
+					}
+					else
+					{
+						showMessage('Unknown error.');
+					}
+				});
+			}
+			createZipWriter();
+		}
+			
+		function onerror(message) {
+			console.log('Error while creating single zip.');
+			console.log(message);
+			console.log(JSON.stringify(message));
+			if(message.message != undefined)
+			{
+				showMessage(message.message);
+			}
+			else
+			{
+				showMessage('Unknown error.');
+			}
+		}
+		
+		function saveAttachmentToPatch(IsValid)
+		{
+			console.log(IsValid);
+			if(IsValid)
+            {
+            	console.log(patchBase64Str.length);
+				if(patchBase64Str.length < limitofZip)
+				{
+					saveAttachments(patchBase64Str);
+				}
+				else
+					showMessage('This patch contains some large components so it requires to use normal deployment for this patch.');
+			}
+			else
+            {
+                enableBoth();
+            }
+		}
+		
+		function startScheduleSnapshot()
+		{
+			scheduleDeployment();
+		}
+		
+		// global maps  fileName => tgtmap
+		//				fileName => fullNameList
+		//				fileName => metaType
+		var targetMap = {};
+		var fullNamesMap = {};
+		var compTypeMap = {};
+		
+		// this function updates aforementioned structures, namely:
+		//   add entries to targetMap=>tgtmap, 
+		//   updates  fullNamesMap=>fullNameList with new names
+		function childXMLJoin(newData,metaType,fullName,fileName)
+		{
+			// create new substructures if they do not exist
+			if (targetMap[fileName] == undefined){
+				targetMap[fileName] = {};
+			}
+			if (fullNamesMap[fileName] == undefined){
+				fullNamesMap[fileName] = [];
+			}
+			if (compTypeMap[fileName] == undefined){
+				compTypeMap[fileName] = {};
+			}
+			// map containing new entries as map fullName => entry f.e. tgtmap[field186__c]={"fullName":"field186__c","externalId":"false"}
+			var tgtmap = targetMap[fileName];
+			// array containing set of full names of entries
+			var fullNameList = fullNamesMap[fileName];
+			
+			var compTypes = compTypeMap[fileName];
+			
+			if(metaType != 'CustomLabel')
+			{
+				fullName = fullName.slice(fullName.lastIndexOf(".")+1,(fullName.length));
+			}
+			if(mmap[metaType] != undefined)
+			{
+				var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+				var srcjson = x2js.xml_str2json(newData);
+				if(srcjson != null)
+				{
+					var srcitems;
+					if(metaType == 'CustomLabel')
+					{
+						var srcMetaItem = srcjson.CustomLabels;
+						srcitems = srcMetaItem.labels;
+					}
+					else if(metaType == 'CustomField')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.fields;
+					}
+					else if(metaType == 'ListView')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.listViews;
+					}
+					else if(metaType == 'CompactLayout')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.compactLayouts;
+					}
+					else if(metaType == 'WebLink')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.webLinks;
+					}
+					else if(metaType == 'RecordType')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.recordTypes;
+					}
+					else if(metaType == 'FieldSet')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.fieldSets;
+					}
+					else if(metaType == 'ValidationRule')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.validationRules;
+					}
+					else if(metaType == 'AssignmentRule')
+					{
+						var srcMetaItem = srcjson.AssignmentRules;
+						srcitems = srcMetaItem.assignmentRule;
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						var srcMetaItem = srcjson.AutoResponseRules;
+						srcitems = srcMetaItem.autoResponseRule;
+					}
+					else if(metaType == 'WorkflowTask')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.tasks;
+					}
+					else if(metaType == 'WorkflowOutboundMessage')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.outboundMessages;
+					}
+					else if(metaType == 'WorkflowFieldUpdate')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.fieldUpdates;
+					}
+					else if(metaType == 'WorkflowKnowledgePublish')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.knowledgePublishes;
+					}
+					else if(metaType == 'WorkflowAlert')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.alerts;
+					}
+					else if( metaType == 'WorkflowRule')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.rules;
+					}
+					else if(metaType == 'SharingCriteriaRule')
+					{
+						var srcMetaItem = srcjson.SharingRules;
+						srcitems = srcMetaItem.sharingCriteriaRules;
+					}
+					else if(metaType == 'SharingOwnerRule')
+					{
+						var srcMetaItem = srcjson.SharingRules;
+						srcitems = srcMetaItem.sharingOwnerRules;
+					}
+					else if(metaType == 'BusinessProcess')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.businessProcesses;
+					}
+					else if(metaType == 'SharingReason')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.sharingReasons;
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						var srcMetaItem = srcjson.EscalationRules;
+						srcitems = srcMetaItem.escalationRule;
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						var srcMetaItem = srcjson.MatchingRules;
+						srcitems = srcMetaItem.matchingRules;
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						var srcMetaItem = srcjson.ManagedTopics;
+						srcitems = srcMetaItem.ManagedTopic;
+					}
+					//create an entities containing new entries as map fullName => entry f.e. tgtmap[field186__c]={"fullName":"field186__c","externalId":"false"}
+					if(srcitems != undefined)
+					{
+						if(srcitems.fullName == undefined)
+					    {	// process array of entries		    	
+					    	$.each(srcitems, function( i, v )
+						    {
+						    	var key = metaType + '#' + v.fullName;
+						    	tgtmap[key] = JSON.stringify(v);
+//						    	fullNameList.push(key);
+						    	compTypes[key] = metaType;
+						    });  
+					    }
+					    else
+					    {	// process single entry
+					    	var key = metaType + '#' + srcitems.fullName;
+						    tgtmap[key] = JSON.stringify(srcitems);
+//					    	fullNameList.push(key);
+					    	compTypes[key] = metaType;
+					    }
+				    }
+				}
+			}
+		}
+		
+		function childXMLJoinAll()
+		{
+			console.log('childXMLJoinAll');
+			Object.keys(fullNamesMap).forEach(function(fileName) {
+    			var fileInfo = ZipfilesMap[fileName];
+				var zipData = fileInfo.data;
+				console.log('join '+fileName);
+				console.log('init zipData '+zipData.length +' bytes');
+				var fileInfo = new Object();
+				fileInfo.name = fileName;
+    			fileInfo.type = childType(compTypeMap[fileName]);
+    			fileInfo.data = childXMLJoinFinal(zipData,fileName);
+				console.log('final zipData '+ fileInfo.data.length +' bytes');
+				ZipfilesMap[fileName]= fileInfo;
+			});
+		}
+		
+		function childType(typesMap)
+		{
+			for (var i in typesMap){
+				return typesMap[i];
+			}
+		}
+		// this function creates a final Xml  for file=fileName using  data from tgtmap and fullNameList 
+		function childXMLJoinFinal(zipData,fileName)
+		{
+			var joinData = ''+zipData;
+			var tgtmap = targetMap[fileName];
+			var metaTypes = compTypeMap[fileName];
+			if (tgtmap == undefined ||  metaTypes == undefined)
+					 return joinData;
+			var keys = Object.keys(tgtmap);
+			if (keys.length > 0)
+			{
+	  			   var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+				   var oldjson = x2js.xml_str2json(zipData);
+
+				   var groupsByTypes = {};
+				   for (var key in metaTypes){
+				   		var type = metaTypes[key];
+				   		if (groupsByTypes[type] == undefined){
+				   			groupsByTypes[type] = [];
+				   		}
+				   		groupsByTypes[type].push(key);
+				   }
+				   
+				   if(oldjson != undefined)
+				   {
+				   // insert childs grouped by types
+				   for (var metaType in groupsByTypes)
+				   {
+
+				    		var srcitems;
+				    		if(metaType == 'CustomLabel')
+							{
+								var srcMetaItem = oldjson.CustomLabels;
+								srcitems = srcMetaItem.labels;
+							}
+							else if(metaType == 'CustomField')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.fields;
+							}
+							else if(metaType == 'ListView')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.listViews;
+							}
+							else if(metaType == 'CompactLayout')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.compactLayouts;
+							}
+							else if(metaType == 'WebLink')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.webLinks;
+							}
+							else if(metaType == 'RecordType')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.recordTypes;
+							}
+							else if(metaType == 'FieldSet')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.fieldSets;
+							}
+							else if(metaType == 'ValidationRule')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.validationRules;
+							}
+							else if(metaType == 'AssignmentRule')
+							{
+								var srcMetaItem = oldjson.AssignmentRules;
+								srcitems = srcMetaItem.assignmentRule;
+							}
+							else if(metaType == 'AutoResponseRule')
+							{
+								var srcMetaItem = oldjson.AutoResponseRules;
+								srcitems = srcMetaItem.autoResponseRule;
+							}
+							else if(metaType == 'WorkflowTask')
+							{
+								var srcMetaItem = oldjson.Workflow;
+								srcitems = srcMetaItem.tasks;
+							}
+							else if(metaType == 'WorkflowOutboundMessage')
+							{
+								var srcMetaItem = oldjson.Workflow;
+								srcitems = srcMetaItem.outboundMessages;
+							}
+							else if(metaType == 'WorkflowFieldUpdate')
+							{
+								var srcMetaItem = oldjson.Workflow;
+								srcitems = srcMetaItem.fieldUpdates;
+							}
+							else if(metaType == 'WorkflowKnowledgePublish')
+							{
+								var srcMetaItem = oldjson.Workflow;
+								srcitems = srcMetaItem.knowledgePublishes;
+							}
+							else if(metaType == 'WorkflowAlert')
+							{
+								var srcMetaItem = oldjson.Workflow;
+								srcitems = srcMetaItem.alerts;
+							}
+							else if(metaType == 'WorkflowRule')
+							{
+								var srcMetaItem = oldjson.Workflow;
+								srcitems = srcMetaItem.rules;
+							}
+							else if(metaType == 'SharingCriteriaRule')
+							{
+								var srcMetaItem = oldjson.SharingRules;
+								srcitems = srcMetaItem.sharingCriteriaRules;
+							}
+							else if(metaType == 'SharingOwnerRule')
+							{
+								var srcMetaItem = oldjson.SharingRules;
+								srcitems = srcMetaItem.sharingOwnerRules;
+							}
+							else if(metaType == 'BusinessProcess')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.businessProcesses;
+							}
+							else if(metaType == 'SharingReason')
+							{
+								var srcMetaItem = oldjson.CustomObject;
+								srcitems = srcMetaItem.sharingReasons;
+							}
+							else if(metaType == 'EscalationRule')
+							{
+								var srcMetaItem = oldjson.EscalationRules;
+								srcitems = srcMetaItem.escalationRule;
+							}
+							else if(metaType == 'MatchingRule')
+							{
+								var srcMetaItem = oldjson.MatchingRules;
+								srcitems = srcMetaItem.matchingRules;
+							}
+							else if(metaType == 'ManagedTopic')
+							{
+								var srcMetaItem = oldjson.ManagedTopics;
+								srcitems = srcMetaItem.ManagedTopic;
+							}
+							// fill preMap with entries of found type
+							var preMap = {};
+							if(srcitems != undefined)
+							{
+								if(srcitems.fullName == undefined)
+							    {			    	
+							    	$.each(srcitems, function( i, v )
+								    {
+								    	var key = metaType + '#' + v.fullName;
+								    	preMap[key] = JSON.stringify(v);
+								    	console.log('old:'+key);
+								    });  
+							    }
+							    else
+							    {
+							    	var key = metaType + '#' + srcitems.fullName;
+								    preMap[key] = JSON.stringify(srcitems);
+							    	console.log('old:'+key);
+							    }
+							}
+							// replace old entry with new one || add new if such an entry does not exist
+							var fullNameListbyType = groupsByTypes[metaType];
+							if (fullNameListbyType.length != undefined && fullNameListbyType.length > 0)
+							{
+								for (var i in fullNameListbyType) {
+									var fullName = fullNameListbyType[i];
+									if (tgtmap[fullName] != undefined){
+										preMap[fullName] = tgtmap[fullName];
+								    	console.log('new:'+fullName);
+									}
+								}
+							}
+							var updatedJsn = '[';
+							for(var name in preMap)
+							{
+								if(updatedJsn == '[')
+								{
+									updatedJsn += preMap[name];
+								}
+								else
+								{
+									updatedJsn+=','+preMap[name];
+								}
+							}
+							updatedJsn+=']';
+							srcitems = JSON.parse(updatedJsn);
+							
+							if(metaType == 'CustomLabel')
+							{
+								srcMetaItem.labels = srcitems;
+								oldjson.CustomLabels = srcMetaItem;
+							}
+							else if(metaType == 'CustomField')
+							{
+								srcMetaItem.fields = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'ListView')
+							{
+								srcMetaItem.listViews = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'CompactLayout')
+							{
+								srcMetaItem.compactLayouts = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'WebLink')
+							{
+								srcMetaItem.webLinks = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'RecordType')
+							{
+								srcMetaItem.recordTypes = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'FieldSet')
+							{
+								srcMetaItem.fieldSets = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'ValidationRule')
+							{	
+								srcMetaItem.validationRules = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'AssignmentRule')
+							{		
+								srcMetaItem.assignmentRule = srcitems;
+								oldjson.AssignmentRules = srcMetaItem;
+							}
+							else if(metaType == 'AutoResponseRule')
+							{
+								srcMetaItem.autoResponseRule = srcitems;
+								oldjson.AutoResponseRules = srcMetaItem;
+							}
+							else if(metaType == 'WorkflowTask')
+							{
+								srcMetaItem.tasks = srcitems;
+								oldjson.Workflow = srcMetaItem;
+							}
+							else if(metaType == 'WorkflowOutboundMessage')
+							{
+								srcMetaItem.outboundMessages = srcitems;
+								oldjson.Workflow = srcMetaItem;
+							}
+							else if(metaType == 'WorkflowFieldUpdate')
+							{
+								srcMetaItem.fieldUpdates = srcitems;
+								oldjson.Workflow = srcMetaItem;
+							}
+							else if(metaType == 'WorkflowKnowledgePublish')
+							{
+								srcMetaItem.knowledgePublishes = srcitems;
+								oldjson.Workflow = srcMetaItem;
+							}
+							else if(metaType == 'WorkflowAlert')
+							{
+								srcMetaItem.alerts = srcitems;
+								oldjson.Workflow = srcMetaItem;
+							}
+							else if(metaType == 'WorkflowRule')
+							{
+								srcMetaItem.rules = srcitems;
+								oldjson.Workflow = srcMetaItem;
+							}
+							else if(metaType == 'SharingCriteriaRule')
+							{
+								srcMetaItem.sharingCriteriaRules = srcitems;
+								oldjson.SharingRules = srcMetaItem;
+							}
+							else if(metaType == 'SharingOwnerRule')
+							{
+								srcMetaItem.sharingOwnerRules = srcitems;
+								oldjson.SharingRules = srcMetaItem;
+							}
+							else if(metaType == 'EscalationRule')
+							{
+								srcMetaItem.escalationRule = srcitems;
+								oldjson.EscalationRules= srcMetaItem;
+							}
+							else if(metaType == 'MatchingRule')
+							{
+								srcMetaItem.matchingRules = srcitems;
+								oldjson.MatchingRules = srcMetaItem;
+							}
+							else if(metaType == 'ManagedTopic')
+							{
+								srcMetaItem.managedTopic = srcitems;
+								oldjson.ManagedTopics = srcMetaItem;
+							}
+							else if(metaType == 'BusinessProcess')
+							{
+								srcMetaItem.businessProcesses = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+							else if(metaType == 'SharingReason')
+							{
+								srcMetaItem.sharingReasons = srcitems;
+								oldjson.CustomObject = srcMetaItem;
+							}
+					}
+						joinData = x2js.json2xml_str(oldjson);
+				    }
+			}
+			return joinData;
+		} 
+				
+		function fileMapCreator(zipFile,metaType,parentId)
+		{
+			if(metaType == 'Profile' || metaType == 'PermissionSet')
+			{
+				for(var fileName in zipFile.files)
+				{
+					if(fileName != undefined && (fileName.indexOf("profiles/") == 0 || fileName.indexOf("permissionsets/") == 0)) 
+	            	{
+	            		var keyFileName = parentId+'#'+metaType+'#'+fileName;
+						patchDataMap[keyFileName] = zipFile.files[fileName].asText();
+					}
+				}
+			}
+			else if(mmap[metaType] == undefined)
+			{
+				for(var fileName in zipFile.files)
+				{
+					if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+	            	{
+						patchDataMap[parentId+'#'+metaType+'#'+fileName] = zipFile.files[fileName].asBinary();
+					}
+				}
+			}
+			else
+			{
+				for(var fileName in zipFile.files)
+				{
+					if(fileName != undefined && fileName.charAt(fileName.length - 1) != '/' && fileName != 'package.xml' && fileName != 'undefined') 
+	            	{
+	            		childSplitter(zipFile.files[fileName].asText(),metaType,parentId,fileName);
+					}
+				}
+			}
+		}
+		
+		function childSplitter(fullXml,metaType,parentId,fileName)
+		{
+			if(fullXml != undefined)
+			{
+				var fullName = '';
+				if(metaType != 'CustomLabel')
+				{
+					fullName = fileName.slice(fileName.indexOf("/")+1,fileName.lastIndexOf('.'))+".";
+				}
+				var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+				var tgtmap = {};
+				var srcjson = x2js.xml_str2json(fullXml);
+				if(srcjson != null)
+				{
+					var srcitems;
+					if(metaType == 'CustomLabel')
+					{
+						var srcMetaItem = srcjson.CustomLabels;
+						srcitems = srcMetaItem.labels;
+					}
+					else if(metaType == 'CustomField')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.fields;
+					}
+					else if(metaType == 'ListView')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.listViews;
+					}
+					else if(metaType == 'CompactLayout')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.compactLayouts;
+					}
+					else if(metaType == 'WebLink')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.webLinks;
+					}
+					else if(metaType == 'RecordType')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.recordTypes;
+					}
+					else if(metaType == 'FieldSet')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.fieldSets;
+					}
+					else if(metaType == 'ValidationRule')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.validationRules;
+					}
+					else if(metaType == 'AssignmentRule')
+					{
+						var srcMetaItem = srcjson.AssignmentRules;
+						srcitems = srcMetaItem.assignmentRule;
+					}
+					else if(metaType == 'AutoResponseRule')
+					{
+						var srcMetaItem = srcjson.AutoResponseRules;
+						srcitems = srcMetaItem.autoResponseRule;
+					}
+					else if(metaType == 'WorkflowTask')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.tasks;
+					}
+					else if(metaType == 'WorkflowOutboundMessage')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.outboundMessages;
+					}
+					else if(metaType == 'WorkflowFieldUpdate')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.fieldUpdates;
+					}
+					else if(metaType == 'WorkflowKnowledgePublish')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.knowledgePublishes;
+					}
+					else if(metaType == 'WorkflowAlert')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.alerts;
+					}
+					else if( metaType == 'WorkflowRule')
+					{
+						var srcMetaItem = srcjson.Workflow;
+						srcitems = srcMetaItem.rules;
+					}
+					else if(metaType == 'SharingCriteriaRule')
+					{
+						var srcMetaItem = srcjson.SharingRules;
+						srcitems = srcMetaItem.sharingCriteriaRules;
+					}
+					else if(metaType == 'SharingOwnerRule')
+					{
+						var srcMetaItem = srcjson.SharingRules;
+						srcitems = srcMetaItem.sharingOwnerRules;
+					}
+					else if(metaType == 'BusinessProcess')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.businessProcesses;
+					}
+					else if(metaType == 'SharingReason')
+					{
+						var srcMetaItem = srcjson.CustomObject;
+						srcitems = srcMetaItem.sharingReasons;
+					}
+					else if(metaType == 'EscalationRule')
+					{
+						var srcMetaItem = srcjson.EscalationRules;
+						srcitems = srcMetaItem.escalationRule;
+					}
+					else if(metaType == 'MatchingRule')
+					{
+						var srcMetaItem = srcjson.MatchingRules;
+						srcitems = srcMetaItem.matchingRules;
+					}
+					else if(metaType == 'ManagedTopic')
+					{
+						var srcMetaItem = srcjson.ManagedTopics;
+						srcitems = srcMetaItem.ManagedTopic;
+					}
+					if(srcitems != undefined)
+					{
+						if(srcitems.fullName == undefined)
+					    {			    	
+					    	$.each(srcitems, function( i, v )
+						    {
+						    	tgtmap[fullName+''+v.fullName] = JSON.stringify(v);
+						    });  
+					    }
+					    else
+					    {
+						    tgtmap[fullName+''+srcitems.fullName] = JSON.stringify(srcitems);
+					    }
+				    }
+				    if(metadataTypeHeaderMap[metaType] != undefined && metadataTypePreTagMap[metaType]  != undefined && metadataTypePostTagMap[metaType]  != undefined && metadataTypeFooterMap[metaType] != undefined)
+				    {
+					    for(var itemName in tgtmap)
+					    {
+					    	tempXml = '';
+
+				    		//header
+				    		tempXml = metadataTypeHeaderMap[metaType];
+				    		//body
+				    		tempXml += metadataTypePreTagMap[metaType]+''+x2js.json2xml_str($.parseJSON(tgtmap[itemName]))+''+metadataTypePostTagMap[metaType];
+				    		//footer
+				    		tempXml += metadataTypeFooterMap[metaType];
+					    	
+							
+							if(tempXml != '')
+							{
+								patchDataMap[parentId+'#'+metaType+'#'+itemName] = tempXml;
+							}
+						}
+				    }
+				}
+			}
+		}
+		
+		//Validation Profile
+    	function createValidDATA() {
+			var Items = patchItems;
+            for(var index in Items)
+			{
+				if(index < Items.length) {
+					if (ValidName[Items[index].metaType] != undefined && Items[index].items.length > 0) {
+						for(var index2 in Items[index].items) {
+							if(index2 <  Items[index].items.length) {
+								var oldList = ValidName[Items[index].metaType];
+								ValidName[Items[index].metaType].push(Items[index].items[index2].itemName);
+								var itemFullName = Items[index].items[index2].itemName;
+								//Activity custom fields to Event and Task
+								if(Items[index].metaType == 'CustomField' && itemFullName.indexOf('Activity.') == 0 && itemFullName.lastIndexOf('__c') == itemFullName.length - 3) {
+								    var tempStr = 'Activity.';
+								    var tempItemName = itemFullName.substring(tempStr.length,itemFullName.length);
+								    ValidName[Items[index].metaType].push('Task.' + tempItemName);
+								    ValidName[Items[index].metaType].push('Event.' + tempItemName);
+							    }
+							}
+						}
+					}
+				}
+			}
+        }
+
+		function validationProfileAndPermissionSet(objectForValidation) {
+			var x2js = new X2JS({useDoubleQuotes : true, stripWhitespaces : false});
+			var orignal = x2js.xml_str2json(objectForValidation);
+			var ObjectForVal;
+			if (orignal.Profile != undefined) {
+				ObjectForVal = orignal.Profile;
+			}
+			else if (orignal.PermissionSet != undefined) {
+				ObjectForVal = orignal.PermissionSet;
+			}
+			if (ObjectForVal != null) {
+				//APEX CLASS
+				if (ObjectForVal.classAccesses != undefined) {
+					var NewArr =[];
+					var EtallonClasses = ValidName.ApexClass;
+					if(Array.isArray(ObjectForVal.classAccesses))	
+					{
+						for(var index in ObjectForVal.classAccesses) {
+							if (jQuery.inArray(ObjectForVal.classAccesses[index].apexClass, EtallonClasses) !== -1) {
+								NewArr.push(ObjectForVal.classAccesses[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.classAccesses.apexClass, EtallonClasses) !== -1) {
+							NewArr.push(ObjectForVal.classAccesses);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.classAccesses = NewArr;
+					}
+					else {
+						delete ObjectForVal.classAccesses;
+					}
+				}
+
+				//APEX PAGE
+				if (ObjectForVal.pageAccesses != undefined) {
+					var NewArr =[];
+					var EtallonPages = ValidName.ApexPage;
+					if(Array.isArray(ObjectForVal.pageAccesses))	
+					{
+						for(var index in ObjectForVal.pageAccesses) {
+							if (jQuery.inArray(ObjectForVal.pageAccesses[index].apexPage, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.pageAccesses[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.pageAccesses.apexPage, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.pageAccesses);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.pageAccesses = NewArr;
+					}
+					else {
+						delete ObjectForVal.pageAccesses;
+					}
+				}
+
+				//TAB permision
+				if (ObjectForVal.tabSettings != undefined && orignal.PermissionSet != undefined) {
+					var NewArr =[];
+					var EtallonTab = ValidName.CustomTab;
+					if(Array.isArray(ObjectForVal.tabSettings))	
+					{
+						for(var index in ObjectForVal.tabSettings) {
+							if (jQuery.inArray(ObjectForVal.tabSettings[index].tab, EtallonTab) !== -1) {
+								NewArr.push(ObjectForVal.tabSettings[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.tabSettings.tab, EtallonTab) !== -1) {
+							NewArr.push(ObjectForVal.tabSettings);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.tabSettings = NewArr;
+					}
+					else {
+						delete ObjectForVal.tabSettings;
+					}
+				}
+
+
+				//TAB Profile
+				if (ObjectForVal.tabVisibilities != undefined && orignal.Profile != undefined) {
+					var NewArr =[];
+					var EtallonTab = ValidName.CustomTab;
+					if(Array.isArray(ObjectForVal.tabVisibilities))	
+					{
+						for(var index in ObjectForVal.tabVisibilities) {
+							if (jQuery.inArray(ObjectForVal.tabVisibilities[index].tab, EtallonTab) !== -1) {
+								NewArr.push(ObjectForVal.tabVisibilities[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.tabVisibilities.tab, EtallonTab) !== -1) {
+							NewArr.push(ObjectForVal.tabVisibilities);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.tabVisibilities = NewArr;
+					}
+					else {
+						delete ObjectForVal.tabVisibilities;
+					}
+				}
+
+				//OBJECT
+				if (ObjectForVal.objectPermissions != undefined) {
+					var NewArr =[];
+					var EtallonObject = ValidName.CustomObject;
+					if(Array.isArray(ObjectForVal.objectPermissions))	
+					{
+						for(var index in ObjectForVal.objectPermissions) {
+							if (jQuery.inArray(ObjectForVal.objectPermissions[index].object, EtallonObject) !== -1) {
+								NewArr.push(ObjectForVal.objectPermissions[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.objectPermissions.object, EtallonObject) !== -1) {
+							NewArr.push(ObjectForVal.objectPermissions);
+						}
+					}
+					
+					if (NewArr.length > 0) {
+						ObjectForVal.objectPermissions = NewArr;
+					}
+					else {
+						delete ObjectForVal.objectPermissions;
+					}
+				}
+
+				//Layout
+				if (ObjectForVal.layoutAssignments != undefined) {
+					var NewArr =[];
+					var EtallonLauout = ValidName.Layout;
+					if(Array.isArray(ObjectForVal.layoutAssignments))	
+					{
+						for(var index in ObjectForVal.layoutAssignments) {
+							if (jQuery.inArray(ObjectForVal.layoutAssignments[index].layout, EtallonLauout) !== -1) {
+								if(ObjectForVal.layoutAssignments[index].recordType != undefined) {
+									var RecordTypesAvailLi = ValidName.RecordType;
+									if (jQuery.inArray(ObjectForVal.layoutAssignments[index].recordType, RecordTypesAvailLi) !== -1) {
+										NewArr.push(ObjectForVal.layoutAssignments[index]);
+									}
+								}
+								else {
+									NewArr.push(ObjectForVal.layoutAssignments[index]);
+								}
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.layoutAssignments.layout, EtallonLauout) !== -1) {
+								//NewArr.push(ObjectForVal.layoutAssignments);
+							if(ObjectForVal.layoutAssignments.recordType != undefined) {
+								var RecordTypesAvailLi = ValidName.RecordType;
+								if (jQuery.inArray(ObjectForVal.layoutAssignments.recordType, RecordTypesAvailLi) !== -1) {
+									NewArr.push(ObjectForVal.layoutAssignments);
+								}
+							}
+							else {
+								NewArr.push(ObjectForVal.layoutAssignments);
+							}
+						}
+					}
+					
+					if (NewArr.length > 0) {
+						ObjectForVal.layoutAssignments = NewArr;
+					}
+					else {
+						delete ObjectForVal.layoutAssignments;
+					}
+				}
+
+				//recordType
+				if (ObjectForVal.recordTypeVisibilities != undefined) {
+					var NewArr =[];
+					var EtallonObject = ValidName.RecordType;
+					if (EtallonObject.length > 0) {
+						if(Array.isArray(ObjectForVal.recordTypeVisibilities))	
+						{
+							for(var index =0; index < ObjectForVal.recordTypeVisibilities.length; index++) {
+								var RecordTypeName = ObjectForVal.recordTypeVisibilities[index].recordType; 
+								if (jQuery.inArray(RecordTypeName, EtallonObject) !== -1) {
+									NewArr.push(ObjectForVal.recordTypeVisibilities[index]);
+								}
+							}
+						}
+						else
+						{
+							var RecordTypeName = ObjectForVal.recordTypeVisibilities.recordType;
+							if (jQuery.inArray(RecordTypeName, EtallonObject) !== -1) {
+								NewArr.push(ObjectForVal.recordTypeVisibilities);
+							}
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.recordTypeVisibilities = NewArr;
+					}
+					else {
+						delete ObjectForVal.recordTypeVisibilities;
+					}
+				}
+
+				//fieldPermissions
+				if (ObjectForVal.fieldPermissions != undefined) {
+					var NewArr =[];
+					var EtallonObject = ValidName.CustomField;
+					if (EtallonObject.length > 0) {
+						if(Array.isArray(ObjectForVal.fieldPermissions))	
+						{
+							for(var index =0; index < ObjectForVal.fieldPermissions.length; index++) {
+								var fieldName = ObjectForVal.fieldPermissions[index].field;
+								if (jQuery.inArray(fieldName, EtallonObject) !== -1) {
+									NewArr.push(ObjectForVal.fieldPermissions[index]);
+								}
+							}
+						}
+						else
+						{
+							var fieldName = ObjectForVal.fieldPermissions.field;
+							if (jQuery.inArray(fieldName, EtallonObject) !== -1) {
+								NewArr.push(ObjectForVal.fieldPermissions);
+							}
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.fieldPermissions = NewArr;
+					}
+					else {
+						delete ObjectForVal.fieldPermissions;
+					}
+				}
+				
+				//applicationVisibilities
+				if (ObjectForVal.applicationVisibilities != undefined) {
+					var NewArr =[];
+					var EtallonPages = ValidName.CustomApplication;
+					if(Array.isArray(ObjectForVal.applicationVisibilities))	
+					{
+						for(var index in ObjectForVal.applicationVisibilities) {
+							if (jQuery.inArray(ObjectForVal.applicationVisibilities[index].application, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.applicationVisibilities[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.applicationVisibilities.application, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.applicationVisibilities);
+						}
+					}
+					
+					if (NewArr.length > 0) {
+						ObjectForVal.applicationVisibilities = NewArr;
+					}
+					else {
+						delete ObjectForVal.applicationVisibilities;
+					}
+				}
+				
+				//externalDataSourceAccesses
+				if (ObjectForVal.externalDataSourceAccesses != undefined) {
+					var NewArr =[];
+					var EtallonPages = ValidName.ExternalDataSource;
+					if(Array.isArray(ObjectForVal.externalDataSourceAccesses))	{
+						for(var index in ObjectForVal.externalDataSourceAccesses) {
+							if (jQuery.inArray(ObjectForVal.externalDataSourceAccesses[index].externalDataSource, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.externalDataSourceAccesses[index]);
+							}
+						}
+					}
+					else {
+						if (jQuery.inArray(ObjectForVal.externalDataSourceAccesses.externalDataSource, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.externalDataSourceAccesses);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.externalDataSourceAccesses = NewArr;
+					}
+					else {
+						delete ObjectForVal.externalDataSourceAccesses;
+					}
+				}
+				
+				//customPermissions
+				if (ObjectForVal.customPermissions != undefined) {
+					var NewArr =[];
+					var EtallonPages = ValidName.CustomPermission;
+					if(Array.isArray(ObjectForVal.customPermissions))	
+					{
+						for(var index in ObjectForVal.customPermissions) {
+							if (jQuery.inArray(ObjectForVal.customPermissions[index].name, EtallonPages) !== -1) {
+								NewArr.push(ObjectForVal.customPermissions[index]);
+							}
+						}
+					}
+					else
+					{
+						if (jQuery.inArray(ObjectForVal.customPermissions.name, EtallonPages) !== -1) {
+							NewArr.push(ObjectForVal.customPermissions);
+						}
+					}
+					if (NewArr.length > 0) {
+						ObjectForVal.customPermissions = NewArr;
+					}
+					else {
+						delete ObjectForVal.customPermissions;
+					}
+				}
+			}
+			if(ObjectForVal != null && ObjectForVal.userPermissions != undefined)
+				delete ObjectForVal.userPermissions;
+			if(ObjectForVal != null && ObjectForVal.loginIpRanges != undefined)
+    			delete ObjectForVal.loginIpRanges;
+			if (orignal.Profile != undefined && ObjectForVal != null) {
+				 orignal.Profile = ObjectForVal;
+			}
+			else if (orignal.PermissionSet != undefined && ObjectForVal != null) {
+				orignal.PermissionSet = ObjectForVal;
+			}
+            
+            var returnXML = x2js.json2xml_str(orignal);
+			return returnXML;
+		}
+		
+		function packageXmlCreator(metaItesList)
+		{
+			var xml = '<?xml version="1.0" encoding="UTF-8"?><Package xmlns="http://soap.sforce.com/2006/04/metadata">';
+			if(metaItesList.length > 0)
+			{
+				for(var index in metaItesList)
+				{
+					if(index < metaItesList.length)
+					{
+						var metaItems = metaItesList[index];
+						var packageXmlLi = metaItems.items;
+						xml = xml + '<types>';
+						for(var index2 in packageXmlLi)
+						{
+							if(index2 < packageXmlLi.length)
+							{
+								xml = xml + '<members>';
+								xml = xml + packageXmlLi[index2].itemName;
+								xml = xml + '</members>';
+							}
+						}
+						xml = xml + '<name>'+metaItems.metaType+'</name></types>';
+					}
+				}
+				xml = xml + '<version>'+apiVersion+'</version></Package>';
+			}
+			else
+				xml = '<?xml version="1.0" encoding="UTF-8"?><Package xmlns="http://soap.sforce.com/2006/04/metadata"><version>'+apiVersion+'</version></Package>';
+			return xml;
+		}
+		
+		function destructiveXmlCreator(packageXmlMap)
+		{
+			var xml = '<?xml version="1.0" encoding="UTF-8"?><Package xmlns="http://soap.sforce.com/2006/04/metadata">';
+			var isFound = false;
+			for(var mType in packageXmlMap)
+			{
+				if(!isFound)
+					isFound = true;
+				var packageXmlLi = [];
+				packageXmlLi = packageXmlMap[mType];
+				xml = xml + '<types>';
+				for(var index in packageXmlLi)
+				{
+					if(index < packageXmlLi.length)
+					{
+						xml = xml + '<members>';
+						xml = xml + packageXmlLi[index];
+						xml = xml + '</members>';
+					}
+				}
+				xml = xml + '<name>'+mType+'</name></types>';
+			}
+			xml = xml + '<version>'+apiVersion+'</version></Package>';
+			if(!isFound)
+			{
+				return '';
+			}
+			return xml;
+		}
+		
+		function disableBoth()
+		{
+			var toDisableItems = document.getElementsByClassName('disableitem');
+			for (var i = 0; i < toDisableItems.length; i++) 
+			{
+				if(toDisableItems[i].type == 'button' || toDisableItems[i].type == 'select-one' || toDisableItems[i].type == 'text' || toDisableItems[i].type == 'checkbox' || toDisableItems[i].type == 'textarea')
+				{
+					toDisableItems[i].disabled = true;
+				}
+			}
+		}
+		
+		function enableBoth()
+		{
+			var toDisableItems = document.getElementsByClassName('disableitem');
+			for (var i = 0; i < toDisableItems.length; i++) 
+			{
+				if(toDisableItems[i].type == 'button' || toDisableItems[i].type == 'select-one' || toDisableItems[i].type == 'text' || toDisableItems[i].type == 'checkbox' || toDisableItems[i].type == 'textarea')
+				{
+					toDisableItems[i].disabled = false;
+				}
+			}
+		}
+		
+		function mapCounter(localMap)
+		{
+			var temp = 0;
+			for(var key in localMap)
+			{
+				temp++;
+			}
+			return temp;
+		}
+		
+		function setMessageOnPage(msg)
+		{
+			var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+				var childVal = parentVal.find('.messageText');
+				if(childVal != undefined)
+				{
+					if(msg.indexOf('#') > -1)
+					{
+						var li = msg.split('#');
+						var strHtml = '<span></span>';
+						for(var index=0; index < li.length; index++)
+							strHtml+= '<li>'+li[index]+'</li>';
+						childVal.html(strHtml);
+					}
+					else
+						childVal.text(msg);
+				}
+			}
+		}
+		
+		function setDefaultMessageOnPage(msg)
+		{
+			var parentVal = $("[id$='msg2']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+				var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+									'<div class="message infoM3" role="alert">'+
+										'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+											'<tbody>'+
+												'<tr valign="top">'+
+													'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+													'<td class="messageCell">'+
+														'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+															'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																'<h4></h4>'+
+															'</span>'+msg+'<br>'+
+														'</div>'+
+													'</td>'+
+												'</tr>'+
+												'<tr>'+
+													'<td></td>'+
+													'<td></td>'+
+												'</tr>'+
+											'</tbody>'+
+										'</table>'+
+									'</div>'+
+								'</span>';
+				parentVal.append(childVal);				
+			}
+		}
+		
+		function bindWindow()
+		{
+		    $(window).bind("beforeunload", function() { 
+		        return "Deployment may be in progress.";
+		    });
+		    
+		}
+		
+		function unbindWindow()
+		{
+			$(window).unbind();
+		}
+    </script>
+</apex:page>

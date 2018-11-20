@@ -1,0 +1,226 @@
+<apex:page doctype="HTML-5.0" standardController="Flosum__Organisation__c" extensions="Flosum.RegisterOrganizationController" sidebar="false">
+<c:TrackPanel />
+<apex:includeScript value="{!URLFOR($Resource.Flosum__jquery)}"/>
+<apex:includeScript value="{!URLFOR($Resource.Flosum__jsforce)}"/> 
+<apex:outputLabel id="nonevalue">
+ 	<script language="javascript">
+            /*$(function() {        
+                $('select.RemoveNone option[value=""]').remove();     
+            });*/
+    </script> 
+</apex:outputLabel>
+
+<c:Wait />
+		<apex:form >
+			<apex:pageMessage escape="false" summary="Please enter the org name and select org type (leave authentication type as automatic). After clicking on Authorize button, you will be forwarded to the standard Salesforce login page.<br/><br/>
+										If you are not redirected back to Flosum after entering valid credentials, then please contact Flosum Support or your Flosum representative for instructions on manual authentication.<br/><br/>
+										This page works best with Google Chrome, Edge, Safari or Firefox (cannot be used with Internet Explorer)." severity="info" strength="0" />
+			<apex:pagemessages id="msg_cred"/>
+			<apex:actionfunction name="checkGovtOrg" rerender="creds,msg_cred,nonevalue" oncomplete="hide();"/>
+			<apex:pageblock title="Add Organizations">
+						<apex:pageBlockSection id="creds" rendered="true" columns="1"> 
+							<apex:pageBlockSectionItem >
+						       <apex:outputlabel value="{!$ObjectType.Flosum__Organisation__c.fields.Name.label}" />
+						       <apex:inputField value="{!organizationRecord.Name}" />
+					       </apex:pageBlockSectionItem>
+					       <apex:pageBlockSectionItem >
+			                   <apex:outputlabel value="Authentication Type" />
+			                    <apex:selectList value="{!selectedAuthType}" styleClass="selectedAuthType" onchange="show();checkGovtOrg();" multiselect="false" size="1">
+			                        <apex:selectOptions value="{!authOptions}"/>
+			                    </apex:selectList>
+			               </apex:pageBlockSectionItem>
+					       <apex:pageBlockSectionItem >
+						       <apex:outputlabel value="{!$ObjectType.Flosum__Organisation__c.fields.Flosum__Organisation_Type__c.label}" />
+								<apex:selectList value="{!organizationRecord.Flosum__Organisation_Type__c}" styleClass="RemoveNone" onchange="show();checkGovtOrg();" multiselect="false" size="1" disabled="{!isUpdatePage}">
+						            <apex:selectOption itemValue="Developer/Production" itemLabel="Developer/Production"/>
+						            <apex:selectOption itemValue="Sandbox" itemLabel="Sandbox"/>
+						            <apex:selectOption itemValue="Government cloud org" itemLabel="Government cloud org"/>
+						        </apex:selectList>
+					       </apex:pageBlockSectionItem>
+					       <apex:pageBlockSectionItem rendered="{!If(organizationRecord.Flosum__Organisation_Type__c == 'Government cloud org',true,false)}" >
+					       		<apex:outputlabel value="{!$ObjectType.Flosum__Organisation__c.fields.Flosum__HostName__c.label}" />
+					       		<apex:outputPanel >
+									<apex:inputField value="{!organizationRecord.Flosum__HostName__c}"/>
+<!-- 									<apex:outputField value="{!organizationRecord.Flosum__HostName__c}" rendered="{!isUpdatePage}"/> -->
+								</apex:outputPanel>
+					       </apex:pageBlockSectionItem>
+					       <apex:pageBlockSectionItem id="passBlock" rendered="{!selectedAuthType == MANUAL_AUTH}">
+			                   <apex:outputlabel value="Authorization Code" />
+			                   <apex:inputsecret value="{!password}" styleclass="pkp" redisplay="true"/>   
+			               </apex:pageBlockSectionItem>
+				    	</apex:pageBlockSection>
+				    <apex:actionfunction name="checkAndSave" action="{!checkAndSave}" rerender="creds,msg_cred" oncomplete="afterSave('{!remoteSiteSettingURL}','{!PlaceOfException}');"/>
+				    <apex:actionfunction name="authorize" action="{!processLogin}" oncomplete="promptLink('{!JSENCODE(loginUrl)}','{!JSENCODE(organizationRecord.Name)}');" rerender="msg_cred,nonevalue"></apex:actionfunction> 
+				    <apex:actionfunction name="completeRegisterOrg" action="{!completeRegisterOrg}" oncomplete="hide();" rerender="msg_cred,nonevalue"></apex:actionfunction> 
+	 				<apex:actionfunction action="{!showMessage}" reRender="creds,msg_cred" name="showMessage" onComplete="hide();">
+						<apex:param assignTo="{!message}" value="" name="newstr"/>
+					</apex:actionfunction>
+					<apex:actionfunction name="autoAuth" action="{!autoAuth}" rerender="registerBlock,msg_cred" oncomplete="afterSave('{!remoteSiteSettingURL}','{!PlaceOfException}');"/>
+	 			<apex:pageBlockButtons location="bottom">  
+					<apex:commandbutton value="Authorize" onclick="auth(); return false;"/>
+					<apex:commandbutton action="{!cancelSave}" value="Cancel" />
+				</apex:pageBlockButtons>
+			</apex:pageblock>
+		</apex:form>
+		<script>
+			var url = '{!baseUrl}';
+			var flosumsf = jsforce;
+			$( document ).ready(function() {
+	        	var code = '{!JSENCODE($CurrentPage.parameters.code)}';
+	        	console.log(code);
+	        	if(code != '')
+	        	{
+	        		show();
+			    	autoAuth();
+			    }
+			});
+			
+			function promptLink(linkUrl,organizationName){
+				if(linkUrl != '' && $(".selectedAuthType").val() != '{!AUTO_AUTH}')
+				{
+					prompt('Copy the following link and open in other browser or in incognito mode to get autorization code', linkUrl);
+				}
+			}
+			
+			function auth() {
+	            if($(".pkp").val() == '' || $(".selectedAuthType").val() == '{!AUTO_AUTH}') {
+	                authorize();
+	            } else {
+	                show();
+	                checkAndSave();
+	            }
+	            return false;
+	        }
+			
+			function afterSave(remoteSiteSettingURL,placeOfEX)
+			{
+				console.log(remoteSiteSettingURL);
+				console.log(placeOfEX);
+				if(remoteSiteSettingURL != '' && (placeOfEX == 'ID' || placeOfEX == 'AUTHORIZATION'))
+				{
+					listRemoteSiteSetting(remoteSiteSettingURL,placeOfEX);
+				}
+				else
+					hide();
+			}
+			
+			function listRemoteSiteSetting(RSURL,placeOfEX)
+			{
+				var reg = /[^a-zA-Z0-9]+/g
+			    var host = RSURL;
+			    var fullName = RSURL.slice(8,RSURL.indexOf('.salesforce.com'));
+			    fullName = fullName.replace(reg,'');
+			    var firstChar = fullName.charAt(0);
+				if(firstChar >= 0 && firstChar <= 9)
+				{
+				    fullName = 'A' + fullName;
+				}
+
+				var ExistingNames = {};
+				var selfConn = new flosumsf.Connection({ accessToken: '{!$API.Session_Id}' });
+				var queryLi = [];
+	        	var query = new Object();
+	        	query.folder = '';
+	        	query.type = 'RemoteSiteSetting';
+	        	queryLi.push(query);
+	        	console.log(ExistingNames);
+	        	selfConn.metadata.list(queryLi, '34.0', function(err,result){
+	        		if(err) 
+	            	{
+	            		console.log(err);
+	            		if(err != undefined && err.errorCode == 'sf:INSUFFICIENT_ACCESS')
+	            			showMessage('INSUFFICIENT_ACCESS: use of the Metadata API requires a user with the ModifyAllData permission. Add remote site setting with url('+host+').');
+	            		else
+	            			showMessage(JSON.stringify(err));
+	            	}
+	            	else
+	            	{
+	            		if(Array.isArray(result))
+            			{
+            				for(var index in result)
+            				{
+            					if(index < result.length)
+            					{
+            						var mi = result[index];
+            						ExistingNames[mi.fullName]= mi.fullName;
+            					}
+            				}
+            			}
+            			else
+            			{
+            				ExistingNames[result.fullName]= result.fullName;
+            			}
+            			var remoteSite = new Object();
+            			remoteSite.fullName = ExistingNames[fullName] != undefined ?  getRemoteSiteName(fullName+'1',ExistingNames) : fullName;
+            			remoteSite.description = 'Metadata API Remote Site Setting for Flosum Application';
+            			remoteSite.isActive = true;
+            			remoteSite.url = host;
+            			console.log(remoteSite);
+            			selfConn.metadata.create('RemoteSiteSetting',remoteSite,function(err2,result2){
+            				if(err2) 
+			            	{
+			            		console.log(err2);
+			            		if(err2 != undefined && err2.errorCode == 'sf:INSUFFICIENT_ACCESS')
+			            			showMessage('INSUFFICIENT_ACCESS: use of the Metadata API requires a user with the ModifyAllData permission. Add remote site setting with url('+host+').');
+			            		else
+			            			showMessage(JSON.stringify(err2));
+			            	}
+			            	else
+			            	{
+			            		if(result2 != undefined && result2.success)
+			            		{
+			            			if(placeOfEX == 'AUTHORIZATION')
+						     		{
+						     			checkAndSave();
+						     		}
+						     		else if(placeOfEX == 'ID')
+						     		{
+						     			completeRegisterOrg();
+						     		}
+						     		else
+						     		{
+						     			hide();
+						     		}
+			            		}
+			            		else
+			            		{
+			            			console.log(JSON.stringify(result2.errors));
+			            			hide();
+			            		}
+			            	}
+            			});
+	            	}
+	        	});
+			}
+			
+			function getRemoteSiteName(fullName,ExistingNames)
+			{
+				if(ExistingNames[fullName] != undefined)
+				{
+					fullName = calculateName(fullName);
+					return getRemoteSiteName(fullName,ExistingNames);
+				}
+				else
+				{
+					return fullName;
+				}
+			}
+			
+			function calculateName(input)
+			{
+				var result = input;
+				var i = input.length;
+				var last = input.charAt(--i);
+				if(isNaN(last))
+				{
+					return result+'1';
+				}
+				else
+				{
+                    last = parseInt(last) + 1;
+                    result = result.slice(0,result.length - 1);
+					return result  + ''+last ;
+				}
+			}
+		</script>
+</apex:page>

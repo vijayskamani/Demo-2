@@ -1,0 +1,13 @@
+<messaging:emailTemplate subject="Deployment of {!relatedTo.Patch__r.Name} patch to the {!relatedTo.Organisation__r.Name} org {!IF(relatedTo.Flosum__Succeed__c,'succeeded','failed')}." recipientType="User" relatedToType="Flosum__Metadata_Log__c">
+<messaging:htmlEmailBody >
+        <html>
+            <body>
+                <p>Dear {!recipient.FirstName},</p>
+                <p>Deployment of {!relatedTo.Patch__r.Name} patch to the {!relatedTo.Organisation__r.Name} org {!IF(relatedTo.Flosum__Succeed__c,'succeeded','failed')}.</p>
+                <p>You can find additional details of this deployment in the log file found here:</p>
+                <c:NotificationComponent recordId="{!relatedTo.Id}"/>
+                <c:FlosumLogo />
+            </body>
+        </html>
+</messaging:htmlEmailBody>
+</messaging:emailTemplate>

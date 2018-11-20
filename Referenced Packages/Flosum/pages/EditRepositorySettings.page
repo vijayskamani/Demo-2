@@ -1,0 +1,931 @@
+<apex:page controller="Flosum.EditRepositorySettingsController" doctype="html-5.0" sidebar="true" cache="false" id="repositorySettings">
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__Merge, 'Merge/jquery-2.1.4.min.js')}" />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__uisetup, 'js/jquery-ui.js')}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__uisetup, 'js/jquery.validate.min.js')}"/>
+	<apex:stylesheet value="{!URLFOR($Resource.Flosum__Merge, 'Merge/css/jquery-ui.css')}"/>
+	
+	<style>
+	
+        input.text {
+            margin-bottom: 12px;
+            width: 95%;
+            padding: .4em;
+        }
+
+        select {
+            margin-bottom: 12px;
+            width: 98%;
+            padding: .4em;
+        }
+
+        fieldset {
+            padding: 0;
+            border: 0;
+            margin-top: 25px;
+            font-size: 80%;
+        }
+
+        .ui-dialog .ui-state-error {
+            padding: .3em;
+        }
+
+        .validateTips {
+            border: 1px solid transparent;
+            padding: 0.3em;
+        }
+
+        .ui-accordion .ui-accordion-content {
+            height: 100%;
+            padding: 0 0;
+        }
+
+        table.gridtable {
+            font-family: verdana,arial,sans-serif;
+            font-size: 11px;
+            color: #333333;
+            border-width: 1px;
+            border-color: #666666;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+            table.gridtable th {
+                border-width: 1px;
+                padding: 8px;
+                border-style: solid;
+                border-color: #666666;
+                background-color: #dedede;
+            }
+
+            table.gridtable td {
+                border-width: 1px;
+                padding: 8px;
+                border-style: solid;
+                border-color: #666666;
+                background-color: #ffffff;
+            }
+	
+	abbr
+	{
+	}
+
+	.tooltip
+	{
+		position:absolute;
+		background-color:#ffff66;
+		border: 1px solid #aaaaca;
+		font-size: smaller;
+		padding:4px;
+		width: 160px;
+		box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+		-moz-box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+		-webkit-box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);	
+	}
+	
+	//
+	
+	/* Color settings */
+
+/* Styles */
+
+form input {
+  height: 25px;
+  line-height: 25px;
+  background: #fff;
+  color: #000;
+  padding: 0 6px;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+
+form .error {
+  color: #ff0000;
+}
+	</style>
+
+    <apex:sectionHeader title="Remote Repository settings" description="Edit Remote repository settings"/>
+    <apex:pagemessages id="msg"/>
+   
+    <br/>
+ 	<apex:form > 
+		<apex:pageBlock title="{!$Label.flosum__heroku_service_settings_title}" id="HerokuServiceSection">
+            <apex:pageBlockbuttons location="top">
+                <apex:commandbutton value="Save" action="{!updateHrecord}" oncomplete="saveHSettings('{!bShowGitExt}')" reRender="msg,HerokuServiceSection"/>
+                <apex:commandbutton value="Cancel" immediate="true" action="{!cancel}"/>
+            </apex:pageBlockbuttons>
+            <apex:pageBlockSection columns="2" >
+                <apex:inputField value="{!hCred.Flosum__Username_Resource__c}" required="true" id="UsernameResource"/>
+				<apex:inputField value="{!hCred.Flosum__Password_Resource__c}"  required="true" id="PasswordResource"/>
+                <apex:inputField value="{!hCred.Flosum__AccessPoint__c}" style="width:400px;" required="true" html-placeholder="https://your-app-name.herokuapp.com" id="AccessPoint"/>
+                <apex:inputCheckBox value="{!hCred.Flosum__isAutoSync__c}" label="{!$Label.flosum__git_enabled_label}"  id="chkBox1"/>
+            </apex:pageBlockSection>
+        </apex:pageBlock>  
+	</apex:form> 
+		
+	<apex:form id="GitExtDetails"> 
+        <apex:pageblock title="Synchronization options" id="info">
+	        <apex:pageBlockButtons location="top">
+				<apex:commandButton value="Save" action="{!saveSettings}"/>
+			</apex:pageBlockButtons>
+            <apex:pageBlockSection columns="1" id="syncSettings1">
+               <apex:pageBlockSectionItem id="pbsi3">
+         	 	<apex:selectcheckboxes layout="pageDirection"  value="{!SyncItems}" label="" id="checkbox1">                   
+             		<apex:selectoptions value="{!SyncOptions}"/>       
+            	</apex:selectcheckboxes>
+               </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection columns="2" id="syncSettings2">
+               <apex:pageBlockSectionItem id="pbsi5">
+            		<apex:outputLabel value="Get authorization token for Heroku service"/>
+		            <apex:commandbutton value="Get token" action="{!auth}" oncomplete="getTokens()" rerender="msg"/>
+               </apex:pageBlockSectionItem>
+               <apex:pageBlockSectionItem id="pbsi4">
+            		<apex:outputLabel value="Use scheduled synchonization (check every 15 min)"/>
+               		<apex:inputCheckBox value="{!hCred.Flosum__isScheduledSync__c}" id="chkBox2"/>
+               </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            <div  style="display:none" id="tokenArea">
+            <apex:pageBlockSection columns="1" id="outputSyncSettings">
+               <apex:pageBlockSectionItem id="pbsi6">
+     	      		<apex:outputLabel value="Generated token" />
+        	    	<textarea value="" style="width:75%;" rows="6"  id="token"></textarea>
+               </apex:pageBlockSectionItem>
+               <apex:pageBlockSectionItem id="pbsi7">
+               		<apex:outputPanel >
+                        <div style="text-align: center">
+	               			<abbr title="COPIED"><apex:commandbutton value="Copy to clipboard" onclick="copyTokenToClipboard();" rerender="none"/></abbr>
+	               		</div>
+	               	</apex:outputPanel>
+               </apex:pageBlockSectionItem>
+            </apex:pageBlockSection>
+            </div>
+        </apex:pageblock>
+    </apex:form>
+    
+ 
+	<apex:form id="GitExt"> 
+        <apex:pageblock title="{!$Label.flosum__git_credentials}" id="info">
+	        <apex:pageBlockButtons location="top">
+				<apex:commandButton value="New" action="{!newRecord}" oncomplete="openEditor()" rerender="none"/>
+			</apex:pageBlockButtons>
+            <apex:pageBlockSection columns="1" id="table">
+				<apex:pageBlocktable value="{!repoCredsList}" var="item" rendered="{!repoCredsList != null}" >
+					<apex:column headerValue="{!$Label.flosum__action_column}">
+					<apex:commandLink action="{!editRecord}" oncomplete="openEditor('{!JSENCODE(recordJSON)}')" value="Edit" style="color:blue;" rerender="editRecord,topper">
+                    		<apex:param name="sParam" value="{!item.Id}" assignTo="{!selectedRecId}"/>
+                   	</apex:commandLink>
+                   	<span> | </span>
+					<apex:commandLink action="{!delRecord}" value="Del" style="color:blue;" onclick="return confirm('Do you want to delete?');">
+                    		<apex:param name="sParam" value="{!item.Id}" assignTo="{!selectedRecId}"/>
+                   	</apex:commandLink>
+                    </apex:column> 
+		        	<apex:column headerValue="{!$Label.flosum__islinked_column}">
+                       	<apex:inputCheckbox value="{!item.Flosum__isLinked__c}" disabled="true">
+                    	</apex:inputCheckbox>
+                    </apex:column> 
+		        	<apex:column headerValue="{!$Label.flosum__git_credentials_name}">
+                       	<apex:commandLink action="{!editRecord}" value="{!item.Name}" oncomplete="openEditor('{!JSENCODE(recordJSON)}')"  rerender="editRecord,topper">
+                    		<apex:param name="sParam" value="{!item.Id}" assignTo="{!selectedRecId}"/>
+                    	</apex:commandLink>
+                    </apex:column>
+		        	<apex:column headerValue="URI">
+                       	<apex:outputText value="{!item.Flosum__Uri__c}"/>
+                    </apex:column>
+		        </apex:pageBlocktable>
+		        
+                <apex:panelGrid columns="1" style="text-align:center; width:100%;">
+					<apex:outputText style="text-align:center; width:100%; font-size: 16px;" value="No records to display." rendered="{!repoCredsList == null}"/>
+                </apex:panelGrid>
+           	</apex:pageBlockSection>
+        </apex:pageblock>
+ 	</apex:form>
+ 	<apex:form id="attForm" rendered="{!sobjId != null}">
+		<apex:pageBlock title="Upload SSH key">
+	        <apex:pageBlockButtons location="top">
+				<apex:commandButton value="Save" action="{!save}" />
+			</apex:pageBlockButtons>
+			<apex:repeat value="{!newAttachments}" var="newAtt">
+				<apex:pageBlockSection columns="3">
+				   <apex:pageBlockSectionItem >
+						<apex:outputLabel value="File"/>						 
+						<apex:inputFile value="{!newAtt.body}" filename="{!newAtt.name}"/>
+					</apex:pageBlockSectionItem>
+					<apex:pageBlockSectionItem >
+						<apex:outputLabel value="Description"/>						 
+						<apex:inputText value="{!newAtt.Description}"/>
+					</apex:pageBlockSectionItem>
+				</apex:pageBlockSection>
+			</apex:repeat>
+		</apex:pageBlock>
+	</apex:form>
+	<apex:form id="attTable" rendered="{!sobjId != null}">
+	<apex:pageBlock title="Existing SSH keys">
+		<apex:pageBlockTable value="{!attachments}" var="attachment" id="table"  rendered="{!attachments != null}">
+			<apex:column headerValue="Action">
+			   <apex:outputLink value="{!URLFOR($Action.Attachment.Download, attachment.Id)}" target="_blank" style="color:blue;">View</apex:outputLink>
+			   <span> | </span> 
+			   <apex:commandLink action="{!delKey}" value="Del" style="color:blue;" onclick="return confirm('Do you want to delete?');">
+                    		<apex:param name="sParam" value="{!attachment.Id}" assignTo="{!selectedAttId}"/>
+               </apex:commandLink>
+			</apex:column>
+			<apex:column headerValue="Name">
+				<apex:outputText value="{!attachment.Name}"/>
+			</apex:column>
+			<apex:column headerValue="Description">
+				<apex:outputText value="{!attachment.Description}"/>
+			</apex:column>
+		</apex:pageBlockTable>
+		<apex:panelGrid columns="1" style="text-align:center; width:100%;">
+					<apex:outputText style="text-align:center; width:100%; font-size: 16px;" value="No records to display." rendered="{!attachments == null}"/>
+        </apex:panelGrid>
+	</apex:pageBlock>
+	</apex:form>
+ 	
+ 	
+ 	<apex:form id="feedback">
+		<apex:inputHidden id="success" value="{!bErrors}"/>
+		<apex:inputHidden id="errmessage" value="{!msg}"/>
+	    <apex:actionfunction action="{!saveRecord}" oncomplete="checkErrors('{!bErrors}','{!JSENCODE(msg)}')"  name="saveRecord" immediate="true" reRender="success,errmessage,table">
+    		<apex:param assignTo="{!recordJSON}" value="" name="record"/>
+    	</apex:actionfunction>
+    	<apex:actionfunction action="{!saveHerokuSettings}" oncomplete="checkHErrors('{!bErrors}','{!JSENCODE(msg)}');checkUncheck('{!bShowGitExt}');"  name="saveHerokuRecord" immediate="true" reRender="none">
+    		<apex:param assignTo="{!hCredJSON}" value="" name="creds"/>
+    	</apex:actionfunction>
+	    <apex:actionfunction action="{!refresh}" name="refresh" immediate="true" reRender="success,errmessage,table">
+    	</apex:actionfunction>
+    </apex:form>
+    
+    <div id="dialog-form" title="Edit Git credentials" style="display:none">
+       <div id="loadingMsg" style="display:block">
+<!--     	    <p id="formMsg" class="validateTips" style="color: #e62706;padding: initial;border-bottom: chartreuse;background-color: rgba(240, 245, 158, 0.39);padding-bottom: 5px;padding-top: 5px;"></p>
+--> 
+       </div>
+ 
+       <form id="gcRecord">
+            <fieldset>
+				<label for="credsName">Name</label>
+                	<input type="text" name="credsName" id="credsName" class="text ui-widget-content ui-corner-all" /><p/>
+                	<label for="protocol">Access protocol</label>
+                	<select name="protocol" id="protocol" class="text ui-widget-content ui-corner-all" onchange="showSets(this)" style="width:40%;">
+   		                 <option selected="selected" value="HTTPS">HTTPS</option>
+        		         <option value="SSH">SSH</option>
+                	</select>
+                	<div id="constBlock" style="display: block;">
+						<label for="host">Host</label>
+    	            	<input type="text" name="host" id="host" class="text ui-widget-content ui-corner-all" /><p/>
+						<label for="path">Path</label>
+            	    	<input type="text" name="path" id="path" class="text ui-widget-content ui-corner-all" /><p/>
+                		<label for="repository">Repository</label>
+                		<select name="repository" id="repository" class="text ui-widget-content ui-corner-all">
+						</select>
+                	</div>
+                	<p/>
+                	<div id="recordHTTPS" style="display: block;">
+					   <label for="userName">Username</label>
+                	   <input type="text" name="userName" id="userName" class="text ui-widget-content ui-corner-all"/><p/>
+	  				   <label for="password">Password</label>
+                	   <input type="password" name="password" id="password" class="text ui-widget-content ui-corner-all"/><p/>
+                	</div>
+                	<div id="recordSSH" style="display: none;">
+	   				   <label for="passphrase">Passphrase</label>
+                	   <input type="password" name="passphrase" id="passphrase" class="text ui-widget-content ui-corner-all" /><p/>
+                	   <label for="key1">Public key</label>
+                	   <select name="key1" id="key1" class="text ui-widget-content ui-corner-all">
+	  				   </select>
+	  				   <p/>
+                	   <label for="key2">Private key</label>
+                	   <select name="key2" id="key2" class="text ui-widget-content ui-corner-all">
+	   				   </select>
+	   				   <p/>
+                	   <label for="key3">Known Hosts</label>
+                	   <select name="key3" id="key3" class="text ui-widget-content ui-corner-all">
+	   				   </select>
+                	</div>
+  				   <p/>
+                   <div>
+					   <label for="chkBox3">Active</label>
+                	   <input type="checkbox" name="chkBox3" id="chkBox3"/>
+                   </div>
+                 <!-- Allow form submission with keyboard without duplicating the dialog button -->
+                <input type="submit" tabindex="-1" style="position:absolute; top:-1000px" />
+            </fieldset>
+        </form>
+    </div>
+    
+   
+ 
+    <script>
+    	var showGitCredsTable = '{!bShowGitExt}';
+
+		checkUncheck(showGitCredsTable);
+		var optionHttps = true;
+		var optionSsh = false;
+		var access_code = '{!JSENCODE(code)}';
+		var secret = '{!JSENCODE(consumerSecret)}';
+		var key = '{!JSENCODE(consumerKey)}';
+		var redirect_uri = '{!JSENCODE(redirect_url)}';
+		var base_uri = '{!JSENCODE(base_url)}';
+		var login_url = '{!JSENCODE(login_url)}';
+		const message1 = 	'A new refresh token has been generated. This token used to make callbacks from Heroku. Update by this data the config variable with name sftoken on the Settings page on Heroku. '+
+							' After that verify connection to your active git repository on the Git Credentials section';
+		var selected = 'HTTPS';
+		var pageURL = '{!JSENCODE(pageURL)}';
+		
+		
+		
+		$( document ).ready(function() {
+			
+			$('abbr').each(function(){		
+		
+				$(this).data('title',$(this).attr('title'));
+				$(this).removeAttr('title');
+	
+			});
+
+	
+			$('abbr').click(function(){
+		
+				$('abbr').next('.tooltip').remove();
+				$(this).after('<span class="tooltip">' + $(this).data('title') + '</span>');
+		
+				var left = $(this).position().left + $(this).width() + 4;
+				var top = $(this).position().top - 4;
+				$(this).next().css('left',left);
+				$(this).next().css('top',top);				
+		
+				$(this).next('.tooltip').animate({opacity: 0.9},{duration: 2000, complete: function(){
+					$(this).fadeOut(1000);
+				}});
+		
+			});
+			
+			var repo = '{!JSENCODE(repoOptJSON)}';
+			var keys = '{!JSENCODE(keysOptJSON)}';
+  			if (repo != undefined){
+  				repoOpt = JSON.parse(repo);
+  				createObjectsOptionLi('#repository','',repoOpt);
+  			}
+  			if (keys != undefined){
+  				keysOpt = JSON.parse(keys);
+  				createObjectsOptionLi('#key1','',keysOpt);
+  				createObjectsOptionLi('#key2','',keysOpt);
+  				createObjectsOptionLi('#key3','',keysOpt);
+  			}
+			
+   			 console.log( "ready!" );
+		});					
+							
+		
+		function saveHSettings(b){
+			bShowGitExt = (b == true || b == 'true');
+			showMessageJS('Connecting to Heroku...','INFO','yellow');
+			var creds = {};
+			creds.UsernameResource = $('[id$=UsernameResource]').val();
+			creds.PasswordResource = $('[id$=PasswordResource]').val();
+			creds.AccessPoint = $('[id$=AccessPoint]').val();
+			creds.isSync = $('[id$=chkBox1]').is(':checked');
+
+			saveHerokuRecord(JSON.stringify(creds));
+		}
+		
+		
+		function S_GET(id){
+ 		    var a = new RegExp(id+"=([^&#=]*)");
+    		return window.location.search ? decodeURIComponent(a.exec(window.location.search)[1]): '';	
+		}
+		
+		function checkHErrors(flag,message){
+
+			if (flag == true || flag == 'true'){
+				showMessageJS(message,'ERROR','red');
+			}else{
+				showMessageJS(message,'CONFIRM','green');
+			}
+		}
+		
+		function getTokens(){
+			var paramsStr = S_GET('state');
+			if (paramsStr != undefined && paramsStr == 'token'){
+			}else{// return if page loaded not in usual flow
+				return;
+			}
+			if (access_code != undefined && secret != undefined && secret != '' && key != undefined && key != ''){
+				var credential = ' OAuth ' + '{!GETSESSIONID()}'; // native VF function
+				var url = login_url + '/services/oauth2/token?grant_type=authorization_code&code=' + access_code +
+										'&client_id=' + key + '&client_secret=' + secret + '&redirect_uri=' + redirect_uri;
+				
+				var postUrl = base_uri + "/services/proxy";
+				
+				$.ajax( {url: postUrl,
+			        type:"POST",
+			        cache: false,
+			        crossOrigin : true,  
+					beforeSend: function(xhr) {
+            			xhr.setRequestHeader('SalesforceProxy-Endpoint', url);
+            			xhr.setRequestHeader("Authorization", credential);
+            			xhr.setRequestHeader('X-User-Agent', 'MyClient');
+        			},
+         			contentType: 'application/x-www-form-urlencoded',
+         			data:'', 
+         			success:function(data, textStatus, jqXHR) {
+
+         				if (data != undefined && textStatus === "success"){
+         					if (data.refresh_token != undefined && data.instance_url != undefined){
+         						var orgType = 'Production';
+         						if (login_url === 'https://test.salesforce.com' ) orgType = 'Sandbox';
+         						document.getElementById("token").value = (data.refresh_token + ' ' + key + ' ' + secret + ' ' + orgType);
+         						showHideElement("tokenArea",true);
+		         				showMessageJS(message1,'INFO','yellow');
+         						return;
+         					}
+         				}
+         				showMessageJS('Authorization error, verify the registraton of Flosum connected application and try to reload this page','ERROR','red');
+         			},
+         			error: function(jqXHR, textStatus, errorThrown) {showMessageJS('Authorization error, verify the settings for Flosum connected application and try to reload this page','ERROR','red');}
+				});
+			}
+		}
+		getTokens();
+		
+		
+		function copyTokenToClipboard(paratext){
+			var existsTextarea = document.getElementById('token');
+			existsTextarea.select();
+			try {
+		        var status = document.execCommand('copy');
+        		if(!status){
+		            console.error("Cannot copy text");
+        		}else{
+		            console.log("The text is now on the clipboard");
+        		}
+		    } catch (err) {
+        		console.log('Unable to copy.');
+    		}
+		}
+
+
+
+		function selectElementText(el){
+			var range = document.createRange(); // create new range object
+			range.selectNodeContents(el); // set range to encompass desired element text
+			var selection = window.getSelection(); // get Selection object from currently user selected text
+			selection.removeAllRanges(); // unselect any user selected text (if any)
+			selection.addRange(range); // add range to Selection object to select it
+		}
+		
+	    jQuery.validator.addMethod('selectcheck', function (value,element) {
+       			return (value != '-- Select one --' && value != null && value != '');
+   		}, "This field is required");
+   		
+		
+	    jQuery.validator.addMethod('hostcheck', function (value,element) {
+       			if  (value != null && value != '' && value != undefined){
+       				return true;
+       			}
+       			return false;
+   		}, "This field is required");
+
+	    jQuery.validator.addMethod('hostvalid', function (value,element) {
+       			if  (value != null && value != '' && value != undefined){
+       				if ((''+value).trim().toLowerCase().indexOf('https://')  == 0 ||
+       					(''+value).trim().toLowerCase().indexOf('ssh://')  == 0){
+       					return false;
+       				}
+       				return true;
+       			}
+       			return false;
+   		}, "The protocol identifier (https or ssh) in host name is not required");
+
+	    jQuery.validator.addMethod('pathvalid', function (value,element) {
+       			if  (value != null && value != '' && value != undefined){
+       				var pathStr = (''+value).trim().toLowerCase();
+       				return pathStr.endsWith('.git') == false;
+       			}
+       			return false;
+   		}, ".git in the end of path is not required");
+
+
+		String.prototype.endsWith = function(suffix) {
+   			 return this.indexOf(suffix, this.length - suffix.length) !== -1;
+		};
+
+		var allForm;
+		
+		function setRules() {
+			allForm = $("#gcRecord").validate();
+ 
+    		$('[id$=credsName]').rules("add",{
+        		required: true
+    		});     
+     
+    		$('[id$=host]').rules("add",{
+                	hostcheck : true,
+                	hostvalid : true
+            });     
+    
+    		$('[id$=path]').rules("add",{
+        		required: true,
+        		pathvalid: true
+    		});
+
+    		$('[id$=repository]').rules("add",{
+        		selectcheck: true
+    		});
+    		
+    		$('[id$=key1]').rules("add",{
+        		selectcheck: {
+               		depends: function(element) { return $('[id$=protocol]').val() == 'SSH'}
+            	}
+    		});
+    		
+    		$('[id$=key2]').rules("add",{
+        		selectcheck: {
+               		depends: function(element) { return $('[id$=protocol]').val() == 'SSH'}
+            	}
+    		});
+    		
+    		$('[id$=key3]').rules("add",{
+        		required: false
+    		});
+    		
+    		$('[id$=passphrase]').rules("add",{
+        		required: {
+               		depends: function(element) { return $('[id$=protocol]').val() == 'SSH'}
+            	}
+    		});
+    		
+    		$('[id$=userName]').rules("add",{
+        		required: {
+               		depends: function(element) { return $('[id$=protocol]').val() == 'HTTPS'}
+            	}
+    		});
+    		
+    		$('[id$=password]').rules("add",{
+        		required: {
+               		depends: function(element) { return $('[id$=protocol]').val() == 'HTTPS'}
+            	}
+    		});  
+   		  
+			jQuery.validator.messages.required = "This field is required";
+		}
+		
+		
+		function showHideElement(path,b){
+			console.log('updating tables:'+b);
+			if (b){
+				document.getElementById(path).style.display = "block";
+			}else{
+				document.getElementById(path).style.display = "none";
+			}
+		}
+
+		function updateShowTable(b){
+			showHideElement('repositorySettings:GitExt',b);
+		}
+
+		function updateShowEditor(b){
+			showHideElement('repositorySettings:editRecord',b);
+		}
+		
+		function processSettings(section){
+			var b = 
+			showHideElement('repositorySettings:editRecord',b);
+		}
+		    	
+		function checkUncheck(b){
+			console.log('b='+b);
+			syncOn = (b == true || b == 'true') ?  true : false;
+			// do not do anything if errors
+			var isErrors =  '{!bErrors}';
+			if (isErrors == true) return;
+
+			showGitCredsTable = true;
+			updateShowTable(showGitCredsTable);
+			if (!showGitCredsTable)
+				updateShowEditor(false);
+		}
+		
+		function showEditor(b){
+			updateShowEditor(b);
+			updateShowTable(!b);
+		}
+		
+		
+		function  showHideElement(Id, visible){
+			document.getElementById(Id).style.display = (visible == true) ? 'block' : 'none';
+   		}      	
+
+   		function  showSection(https){
+			showHideElement('recordHTTPS', https);
+			showHideElement('recordSSH', !https);
+			optionHttps = https;
+			optionSsh = !https;
+   		}
+
+   		function showSets(elem) {
+       		var selOption = 	elem.options[elem.selectedIndex].text;
+
+   			setRules();
+            	if ( selOption ==  'HTTPS') {
+					showSection(true);
+            	}else if ( selOption ==  'SSH')  {
+					showSection(false);
+            	}
+   		}
+
+ 		function setKeyOptions(lst){
+ 		
+  		}
+		
+		var keysOpt = [];
+		var repoOpt = [];
+		
+  		function setFieldValues(r){
+  			if (allForm != undefined){// reset all messages
+  				allForm.resetForm();
+  			}
+  			// do not set nulls !
+  			if (r != undefined){
+  				rec = JSON.parse(r);
+  				showSection(rec.protocol == 'HTTPS');
+  				setValue('[id$=credsName]', rec.name);
+  				setValue('[id$=userName]', rec.username);
+  				setValue('[id$=key1]', rec.pub,'Combo');
+  				setValue('[id$=key2]', rec.prv,'Combo');
+  				setValue('[id$=protocol]', rec.protocol);
+  				setValue('[id$=host]', rec.host);
+  				setValue('[id$=path]', rec.path);
+  				setValue('[id$=password]', rec.password);
+  				setValue('[id$=passphrase]', rec.passphrase);
+  				setValue('[id$=repository]', rec.localRepo,'Combo');
+  				setValue('[id$=key3]', rec.hosts,'Combo');
+  				setValue('[id$=chkBox3]', rec.checked, 'Checkbox');
+  			}else{
+  				showSection(true);
+  				rec = {};
+  				rec.protocol = 'HTTPS';
+  				setValue('[id$=protocol]', rec.protocol);
+  				setValue('[id$=chkBox3]', true, 'Checkbox');
+  				resetValue('[id$=credsName]');
+  				resetValue('[id$=userName]');
+  				resetValue('[id$=key1]');
+  				resetValue('[id$=key2]');
+//  				resetValue('[id$=protocol]', 'HTTPS');
+  				resetValue('[id$=host]');
+  				resetValue('[id$=path]');
+  				resetValue('[id$=password]');
+  				resetValue('[id$=passphrase]');
+  				resetValue('[id$=repository]');
+  				resetValue('[id$=key3]');
+  			}
+  		}
+  		
+  		
+  		
+  		function setValue(id,v, elem){
+  			if ($(id) != undefined && v != undefined && v != null){
+  				if (elem == 'Checkbox'){
+  					$(id).prop("checked", v);
+  				}else if (elem == 'Combo'){
+  					if (v != null && v != undefined){
+	  					$(id).val(v);
+  					}else{
+  						$(id).val('');
+  					}
+  				}else{
+  					$(id).val(v);
+  				}
+  			}
+  		} 
+
+  		function resetValue(id, v){
+  			if ($(id) != undefined){
+  				if (v != undefined){
+  					$(id).val(null);
+  				}else{
+  					$(id).val('');
+  				}
+  			}
+  		} 
+
+  		function createObjectsOptionLi(Id, selOpt, optList) {
+	    	if (optList != undefined && ($(Id) != undefined)){
+	    		$(Id).append('<option selected="selected" value>-- Select one --</option>');
+           			for (var x = 0; x < optList.length; x++){
+	   					$(Id).append('<option value="' + optList[x].val + '">' + optList[x].name + '</option>');
+           			}
+   			}
+  		} 
+		
+		var rec = {};	
+		var dialog = $( "#dialog-form" ).dialog({
+			autoOpen: false,
+			width: 500,
+			modal: true,
+			buttons: {
+				"Save": saveBtn,
+				Cancel: function() {
+					dialog.dialog( "close" );
+					refresh();
+				}
+			},
+			close: function() {
+				console.log('calling close');
+				refresh();
+			}
+		});
+
+		var form = dialog.find( "form" ).on( "submit", function( event ) {
+			event.preventDefault();
+			console.log('submit form');
+			processInputData();
+		});
+	
+		function openEditor(repo,keys,r){
+
+			showEditor2(true);
+			clearAllMessages();
+			setFieldValues(repo,keys,r);
+			setRules();
+		}
+		
+		function showEditor2(b){
+			
+			if (b == true){
+				dialog.dialog( "open" );
+			}else{
+				dialog.dialog( "close" );
+			}
+		}
+		
+		function saveBtn(){
+			processInputData();
+		}
+		
+		
+		function checkErrors(err,msg){
+			console.log('err='+err);
+			if (err == 'true' || err == true){
+				showMessageJS(msg,'ERROR','red','[id$=loadingMsg]');
+				return;
+			}
+			showMessageJS(msg,'CONFIRM','green');
+			showEditor2(false);
+		}
+		
+		function processInputData(){
+			console.log('submit event');
+			var form = $('[id$=gcRecord]');
+			if (form && form.valid()){
+				console.log('formally valid, validating on  the server');
+        		showMessageJS('Please wait, validating credentials...','INFO','blue','[id$=loadingMsg]');
+
+        		var validRecord = {};
+        		validRecord.name = $('[id$=credsName]').val();
+        		validRecord.protocol = $('[id$=protocol]').val();
+        		validRecord.host = $('[id$=host]').val();
+        		validRecord.path = $('[id$=path]').val();
+        		validRecord.localRepo = $('[id$=repository]').val();
+        		validRecord.password = $('[id$=password]').val();
+        		validRecord.passphrase = $('[id$=passphrase]').val();
+        		validRecord.username = $('[id$=userName]').val();
+        		validRecord.pub = $('[id$=key1]').val();
+        		validRecord.prv = $('[id$=key2]').val();
+        		validRecord.hosts = $('[id$=key3]').val();
+
+        		validRecord.checked =   $('[id$=chkBox3]').is(':checked');
+        		purify(validRecord);
+        		var strRec = JSON.stringify(validRecord);
+
+        		saveRecord(strRec);
+        	}else{// do nothing
+				console.log('invalid data');
+        	}
+		}
+		
+		/*			Utility functions 		*/
+		
+		function purify(obj){
+			for (var v in obj){
+				if (obj.hasOwnProperty(v)){
+					if (obj[v] == '-- Select one --'){
+						obj[v] = null;
+					}
+				}
+			}
+		}
+		
+		function clearAllMessages()
+		{
+        	var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+			}
+        	var parentVal = $("[id$='loadingMsg']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+			}
+		}		
+		
+		function showMessageJS(Message_Str,Message_Type,fontColor,formId)
+		{
+        	var parentVal = $("[id$='msg']");
+        	if (formId != undefined){
+        		parentVal = $(formId);
+        	}
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+			    if(Message_Str != '')
+			    {
+				    if(Message_Type == 'ERROR')
+				    {
+				    	var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+										'<div class="message errorM3" role="alert">'+
+											'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+												'<tbody>'+
+													'<tr valign="top">'+
+														'<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+														'<td class="messageCell">'+
+															'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+																	'<h4>Error:</h4>'+
+																'</span>'+Message_Str+'<br>'+
+															'</div>'+
+														'</td>'+
+													'</tr>'+
+													'<tr>'+
+														'<td></td>'+
+														'<td></td>'+
+													'</tr>'+
+												'</tbody>'+
+											'</table>'+
+										'</div>'+
+									'</span>';
+						parentVal.append(childVal);
+				    }
+				    else if(Message_Type == 'INFO')
+				    {
+						var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+											'<div class="message infoM3" role="alert">'+
+												'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+													'<tbody>'+
+														'<tr valign="top">'+
+															'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+															'<td class="messageCell">'+
+																'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																	'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																		'<h4></h4>'+
+																	'</span>'+Message_Str+'<br>'+
+																'</div>'+
+															'</td>'+
+														'</tr>'+
+														'<tr>'+
+															'<td></td>'+
+															'<td></td>'+
+														'</tr>'+
+													'</tbody>'+
+												'</table>'+
+											'</div>'+
+										'</span>';
+						parentVal.append(childVal);
+					}
+					else if(Message_Type == 'CONFIRM')
+				    {
+						var childVal = 	'<span id="j_id0:msg:j_id15:j_id16:0:j_id17">'+
+											'<div class="message confirmM3" role="alert">'+
+												'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+													'<tbody>'+
+														'<tr valign="top">'+
+															'<td><img alt="CONFIRM" class="msgIcon" src="/s.gif" title="CONFIRM"></td>'+
+															'<td class="messageCell">'+
+																'<div id="j_id0:msg:j_id15:j_id16:0:j_id17:j_id18:j_id20" class="messageText">'+
+																	'<span id="j_id0:msg:j_id15:j_id16:0:j_id17:j_id18:j_id21">'+
+																		'<h4>Success:</h4>'+
+																	'</span>'+
+																	'<font color="'+fontColor+'">'+Message_Str+'</font>'+
+																	'<br>'+
+																'</div>'+
+															'</td>'+
+														'</tr>'+
+														'<tr>'+
+															'<td></td>'+
+															'<td></td>'+
+														'</tr>'+
+													'</tbody>'+
+												'</table>'+
+											'</div>'+
+										'</span>';
+						parentVal.append(childVal);
+					}
+				}
+			}
+		}
+			
+    </script>
+	
+</apex:page>

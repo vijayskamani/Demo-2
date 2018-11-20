@@ -1,0 +1,304 @@
+﻿<apex:page controller="Flosum.Release2017FebController" sidebar="false">
+	<c:TrackPanel />
+	<c:Wait />
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__jsforce)}"/>
+	<apex:includeScript value="{!URLFOR($Resource.Flosum__FlosumPostInstallScript)}"/>
+	<apex:sectionHeader description="{!$Label.flosum__release_2017_feb_page_title}"/>
+	<apex:form >
+		<apex:pagemessages id="msg"/>
+		<apex:pageBlock title="{!$Label.flosum__auto_include_all_member_title}">
+			<p>{!$Label.flosum__auto_include_all_member_description}</p>
+			<apex:pageBlockButtons location="bottom">
+				<apex:commandbutton value="{!$Label.flosum__update}" onClick="readWorklowRule(); return false;" reRender="msg"/>
+			</apex:pageBlockButtons>
+		</apex:pageBlock>
+		<apex:pageBlock title="{!$Label.flosum__fix_the_logo_title}">
+			<p>{!$Label.flosum__fix_the_logo_description}</p>
+        	<apex:pageBlockButtons location="bottom">
+				<apex:commandbutton value="{!$Label.flosum__update}" onClick="readCustomApplication(); return false;" reRender="msg"/>
+			</apex:pageBlockButtons>
+		</apex:pageBlock>
+		<apex:pageBlock title="{!$Label.flosum__email_template_title}">
+			<p>{!$Label.flosum__email_template_descritpion}</p>
+        	<apex:pageBlockButtons location="bottom">
+				<apex:commandbutton value="{!$Label.flosum__update}" onClick="updateEmailTemplates(); return false;" reRender="msg"/>
+			</apex:pageBlockButtons>
+		</apex:pageBlock>
+	</apex:form>
+	<script>
+        var flosumsf = jsforce;
+        var apiVersion = 38;
+        Visualforce.remoting.timeout = 120000;
+        var nameSpacePrefix = '{!JSENCODE(nameSpacePrefix)}';
+        
+        var selfConn = new flosumsf.Connection({ accessToken: '{!$Api.Session_Id}' });
+        selfConn.metadata.pollTimeout = 300000;
+        selfConn.metadata.pollInterval = 30000;
+        
+        //Firest section
+        function readWorklowRule()
+        {
+        	show();
+            var fullNames = [nameSpacePrefix + 'Commit__c.' + nameSpacePrefix + 'OnCommit',
+            				nameSpacePrefix + 'Branch__c.' + nameSpacePrefix + 'OnBranchUpdateAndConflict',
+            				nameSpacePrefix + 'Build__c.' + nameSpacePrefix + 'OnBuildComplete',
+            				nameSpacePrefix + 'Metadata_Log__c.' + nameSpacePrefix + 'OnPatchValidate',
+            				nameSpacePrefix + 'Metadata_Log__c.' + nameSpacePrefix + 'OnPatchDeployment',
+            				nameSpacePrefix + 'Organisation__c.' + nameSpacePrefix + 'OnOrgRegistration',
+            				nameSpacePrefix + 'Metadata_Log__c.' + nameSpacePrefix + 'OnTestExecution',
+            				nameSpacePrefix + 'Snapshot__c.' + nameSpacePrefix + 'OnSnapshotComplete'];
+            console.log(fullNames);
+            selfConn.metadata.read('WorkflowRule', fullNames, function(err, metadata) {
+                if(err) 
+                { 
+                    console.log(err); 
+                    showMessage(err.message,'ERROR');
+                }
+                else
+                {
+                    if(metadata != undefined && metadata.length > 0)
+                    {
+                    	for(var index = 0; index < metadata.length; index++)
+                    	{
+                    		metadata[index].active = true;
+                    	}
+                    	updateWorklowRule(metadata);
+                    }
+                }
+            });
+        }
+        
+        function readWorkflowEmailAlert()
+        {
+            var fullNames = [nameSpacePrefix + 'Organisation__c.' + nameSpacePrefix + 'EmailAlertOnOrgRegistration',
+           					nameSpacePrefix + 'Metadata_Log__c.' + nameSpacePrefix + 'EmailAlertOnPatchValidate',
+           					nameSpacePrefix + 'Commit__c.' + nameSpacePrefix + 'EmailAlertOnCommit',
+           					nameSpacePrefix + 'Build__c.' + nameSpacePrefix + 'EmailAlertOnBuild',
+           					nameSpacePrefix + 'Metadata_Log__c.' + nameSpacePrefix + 'EmailAlertOnTestExecution',
+           					nameSpacePrefix + 'Metadata_Log__c.' + nameSpacePrefix + 'EmailAlertOnPatchDeployment',
+           					nameSpacePrefix + 'Snapshot__c.' + nameSpacePrefix + 'EmailAlertOnSnapshotCompletion',
+           					nameSpacePrefix + 'Branch__c.' + nameSpacePrefix + 'EmailAlertOnBranchUpdate'];
+           	console.log(fullNames);				
+            selfConn.metadata.read('WorkflowAlert', fullNames, function(err, metadata) {
+                if(err) 
+                { 
+                    console.log(err);
+                    showMessage(err.message,'ERROR'); 
+                }
+                else
+                {
+                    if(metadata != undefined && metadata.length > 0)
+                    {
+                    	var insertUsers = [];
+                    	Visualforce.remoting.Manager.invokeAction('{!$RemoteAction.Release2017FebController.getUserNameList}',
+							function fillInsertUserLi(r,e){
+								if(e.status) 
+							    {
+							    	console.log(r);
+							    	if(r != undefined && r.length > 0)
+							    	{
+							    		for(var index = 0; index < r.length; index++)
+							    		{
+							    			insertUsers.push(r[index]);
+							    		}
+							    		updateWorkflowEmailAlert(metadata,insertUsers);
+							    	}
+							    }
+							    else
+							    {
+							    	showMessage(e.message,'ERROR');
+						    	}
+							}
+						);
+                   	}
+                }
+            });
+        }
+        
+        function updateWorklowRule(metadata)
+        {
+            selfConn.metadata.update('WorkflowRule', metadata, function(err, results) {
+                if(err) 
+                { 
+                    console.error(err); 
+                    showMessage(err.message,'ERROR');
+                }
+                else
+                {
+                    console.log(results);
+                    readWorkflowEmailAlert();
+                }
+            });
+        }
+        
+        function updateWorkflowEmailAlert(metadata,insertUsers)
+        {
+			for(var outIndex = 0; outIndex < metadata.length; outIndex++)
+			{
+				metadata[outIndex].recipients = [];
+	            for(var index = 0; index < insertUsers.length; index++)
+	            {
+	                var r1 = {};
+	                r1.type = 'user';
+	                r1.recipient = insertUsers[index];
+	                metadata[outIndex].recipients.push(r1);
+                }
+            }
+            selfConn.metadata.update('WorkflowAlert', metadata, function(err, results) {
+                if(err) 
+                { 
+                    console.error(err); 
+                    showMessage(err.message,'ERROR');
+                }
+                else
+                {
+                    console.log(results);
+                    showMessage('Successfully updated.','INFO');
+                }
+            });
+        }
+        
+        //Second section
+        function readCustomApplication()
+        {
+        	show();
+            var fullNames = [nameSpacePrefix + 'Flosum'];
+            console.log(fullNames);
+            selfConn.metadata.read('CustomApplication', fullNames, function(err, metadata) {
+                if(err) 
+                { 
+                    console.log(err);
+                    showMessage(err.message,'ERROR'); 
+                }
+                else
+                {
+                	console.log(metadata);
+                	updateCustomApplication(metadata)
+                }
+            });
+        }
+        
+        function updateCustomApplication(metadata)
+        {
+        	metadata.logo = nameSpacePrefix + 'Logo/' + nameSpacePrefix + 'Logo2.png';
+        	selfConn.metadata.update('CustomApplication', metadata, function(err, results) {
+                if(err) 
+                { 
+                    console.error(err); 
+                    showMessage(err.message,'ERROR');
+                }
+                else
+                {
+                    console.log(results);
+                    showMessage('Successfully updated.','INFO');
+                }
+            });
+        }
+        
+        //Third section
+        function updateEmailTemplates()
+        {
+        	show();
+        	var opt = getDeployOptions();
+            selfConn.metadata.deploy(flosumEmailTemplatesBase64, opt)
+			.complete(function(err, result) {
+			 	if(err)
+			 	{
+			 		console.error(err);
+			 		showMessage(err.message,'ERROR');
+			 	}
+			 	else if(result.success)
+			 	{
+				 	showMessage('Successfully updated.','INFO');
+		 		}
+		 		else
+		 		{
+		 			showMessage('Update failed.','ERROR');
+		 		}
+		 		console.log(result);
+			});
+        }
+        
+        //to get deployOptions
+		function getDeployOptions()
+		{
+			var deployOption = new Object();
+			deployOption.allowMissingFiles = true;
+           	deployOption.autoUpdatePackage = false;
+           	deployOption.checkOnly = false;
+           	deployOption.ignoreWarnings = false;
+           	deployOption.performRetrieve = false;
+           	deployOption.purgeOnDelete = false;
+           	deployOption.rollbackOnError = true;
+           	deployOption.singlePackage = true;
+           	console.log(deployOption);
+           	return deployOption;
+		}
+        
+        //Page message method
+        showMessage = function(Message_Str,Message_Type)
+        {
+        	var parentVal = $("[id$='msg']");
+			if(parentVal != undefined)
+			{
+			    parentVal.html('');
+			    if(Message_Str != '')
+			    {
+				    if(Message_Type == 'ERROR')
+				    {
+				    	var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+										'<div class="message errorM3" role="alert">'+
+											'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+												'<tbody>'+
+													'<tr valign="top">'+
+														'<td><img alt="ERROR" class="msgIcon" src="/s.gif" title="ERROR"></td>'+
+														'<td class="messageCell">'+
+															'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25" style="color:#cc0000">'+
+																	'<h4>Error:</h4>'+
+																'</span>'+Message_Str+'<br>'+
+															'</div>'+
+														'</td>'+
+													'</tr>'+
+													'<tr>'+
+														'<td></td>'+
+														'<td></td>'+
+													'</tr>'+
+												'</tbody>'+
+											'</table>'+
+										'</div>'+
+									'</span>';
+						parentVal.append(childVal);
+				    }
+				    else if(Message_Type == 'INFO')
+				    {
+						var childVal = '<span id="j_id0:msg:j_id19:j_id20:0:j_id21">'+
+											'<div class="message infoM3" role="alert">'+
+												'<table border="0" cellpadding="0" cellspacing="0" class="messageTable" style="padding:0px;margin:0px;">'+
+													'<tbody>'+
+														'<tr valign="top">'+
+															'<td><img alt="INFO" class="msgIcon" src="/s.gif" title="INFO"></td>'+
+															'<td class="messageCell">'+
+																'<div id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id24" class="messageText">'+
+																	'<span id="j_id0:msg:j_id19:j_id20:0:j_id21:j_id22:j_id25">'+
+																		'<h4></h4>'+
+																	'</span>'+Message_Str+'<br>'+
+																'</div>'+
+															'</td>'+
+														'</tr>'+
+														'<tr>'+
+															'<td></td>'+
+															'<td></td>'+
+														'</tr>'+
+													'</tbody>'+
+												'</table>'+
+											'</div>'+
+										'</span>';
+						parentVal.append(childVal);
+					}
+				}
+			}
+			hide();
+        }
+    </script>
+</apex:page>
